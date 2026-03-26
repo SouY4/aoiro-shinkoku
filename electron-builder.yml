@@ -1,5 +1,5 @@
 appId: com.aoiro-shinkoku.app
-productName: 青色申告
+productName: AoiroShinkoku
 directories:
   output: dist
   buildResources: build

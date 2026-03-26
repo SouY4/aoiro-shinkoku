@@ -43,6 +43,9 @@ jobs:
           pip install Pillow
           python scripts/generate-icon.py
 
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+
       - name: Build
         run: pnpm run electron:build
         env:
