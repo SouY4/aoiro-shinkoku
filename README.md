@@ -38,7 +38,7 @@
 このアプリは以下のZenn Bookと合わせて使うことを想定しています。
 
 > **📘 プログラマーのための青色申告・簿記入門**
-> https://zenn.dev/books/aoiro-shinkoku ← 公開後に更新
+> https://zenn.dev/souya/books/47c148f2d2dc64 
 
 | Book の章 | アプリの対応機能 |
 |----------|----------------|
@@ -58,10 +58,14 @@ Node.js 不要。インストーラーをダウンロードしてそのまま使
 
 | OS | ファイル |
 |----|---------|
-| Windows | [Releases](https://github.com/SouY4/aoiro-shinkoku/releases/latest) から `AoiroShinkoku-x.x.x-Setup.exe` をダウンロード |
+| Windows | [Releases](https://github.com/SouY4/aoiro-shinkoku/releases/latest) から `.exe` をダウンロード |
+| Mac | [Releases](https://github.com/SouY4/aoiro-shinkoku/releases/latest) から `.dmg` をダウンロード |
 
-> **初回起動時の警告について**
+> **Windows：初回起動時の警告について**
 > 「Windows によって PC が保護されました」と表示されたら「詳細情報 → 実行」をクリック
+
+> **Mac：初回起動時の警告について**
+> 「開発元を確認できません」と表示されたら、Finder でアプリを右クリック →「開く」→「開く」をクリック
 
 ---
 
