@@ -8,17 +8,7 @@ const root = path.join(__dirname, '..');
 const dest = path.join(root, 'next-app');
 
 function copyRecursive(src, dst) {
-  const stat = fs.statSync(src);
-  if (stat.isDirectory()) {
-    if (!fs.existsSync(dst)) fs.mkdirSync(dst, { recursive: true });
-    for (const name of fs.readdirSync(src)) {
-      copyRecursive(path.join(src, name), path.join(dst, name));
-    }
-  } else {
-    const dir = path.dirname(dst);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.copyFileSync(src, dst);
-  }
+  fs.cpSync(src, dst, { recursive: true, verbatimSymlinks: true });
 }
 
 if (fs.existsSync(dest)) {
@@ -70,6 +60,7 @@ function copyNativeFiles(srcDir, dstDir) {
   for (const entry of entries) {
     const srcPath = path.join(srcDir, entry.name);
     const dstPath = path.join(dstDir, entry.name);
+    if (entry.isSymbolicLink()) continue;
     if (entry.isDirectory()) {
       copyNativeFiles(srcPath, dstPath);
     } else if (entry.name.endsWith('.node')) {
