@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #1e293b;
+  --primary: #2563eb;
+  --primary-light: #3b82f6;
+  --primary-dark: #1d4ed8;
+  --accent: #dbeafe;
+  --border: #e2e8f0;
+  --muted: #64748b;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --success: #22c55e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+
+  /* 書類印刷レイアウト */
+  .document-preview {
+    width: 100%;
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 15mm;
+    font-size: 11pt;
+    line-height: 1.6;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .document-preview table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  .document-preview th,
+  .document-preview td {
+    border: 1px solid #333;
+    padding: 4pt 8pt;
+  }
+
+  .document-preview th {
+    background-color: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .document-title {
+    font-size: 18pt;
+    text-align: center;
+    letter-spacing: 0.5em;
+    margin-bottom: 20pt;
+  }
+
+  .document-total-box {
+    border: 2px solid #333 !important;
+    padding: 8pt 16pt;
+    font-size: 14pt;
+    font-weight: bold;
+    text-align: center;
+    margin: 12pt 0;
+    background: none !important;
+  }
+
+  aside { display: none !important; }
+  main { margin: 0 !important; padding: 0 !important; }
+}

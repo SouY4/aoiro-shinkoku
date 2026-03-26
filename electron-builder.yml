@@ -1,0 +1,34 @@
+appId: com.aoiro-shinkoku.app
+productName: 青色申告
+directories:
+  output: dist
+  buildResources: build
+files:
+  - electron/**/*
+  - "!next-app"
+extraResources:
+  - from: next-app
+    to: app
+    filter:
+      - "**/*"
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerLanguages:
+    - ja
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64

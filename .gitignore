@@ -1,0 +1,68 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Next.js
+.next
+out
+build
+.vercel
+
+# Env (secrets)
+.env
+.env.local
+.env.*.local
+
+# Prisma (generated client)
+/src/generated/prisma
+
+# Local DB & uploads (個人データ) — 実際の保存先を明示的に除外
+/prisma/data/database.sqlite
+/prisma/data/database.sqlite-shm
+/prisma/data/database.sqlite-wal
+/prisma/data/receipts/
+# その他 prisma 直下に作られる SQLite
+/prisma/*.db
+/prisma/*.sqlite
+
+# Electron
+next-app
+dist
+*.exe
+
+# Logs & debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# TypeScript
+*.tsbuildinfo
+
+# Windows 予約名（誤作成すると git add で失敗する）
+/nul
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# MCP (ローカルパスが含まれるため個人設定)
+.mcp.json
+
+# Claude Code (local AI settings)
+.claude/
+
+# IDE / editor
+.idea
+*.swp
+*.swo
+
+# Test / coverage
+coverage
+.nyc_output
+
+files
+
+/data

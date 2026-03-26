@@ -1,0 +1,5 @@
+allowScriptsForPackages: prisma,@prisma/engines,better-sqlite3,@prisma/client
+
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

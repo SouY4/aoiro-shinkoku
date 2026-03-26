@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// 勘定科目 (Chart of Accounts)
+model Account {
+  id          Int           @id @default(autoincrement())
+  code        String        @unique
+  name        String
+  type        String        // "asset" | "liability" | "revenue" | "expense" | "capital"
+  category    String        // Sub-category for grouping
+  description String?
+  isDefault   Boolean       @default(true)
+  isActive    Boolean       @default(true)
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  journalLines JournalLine[]
+  fixedAssetsAsAsset   FixedAsset[] @relation("FixedAssetAsset")
+  fixedAssetsAsExpense FixedAsset[] @relation("FixedAssetExpense")
+}
+
+// 仕訳 (Journal Entry header)
+model JournalEntry {
+  id              Int           @id @default(autoincrement())
+  date            DateTime      // 仕訳日（記入日）
+  transactionDate DateTime?     // 取引日（売上日・購入日など）
+  paymentDate     DateTime?     // 入金日 or 支払日
+  description     String
+  isAdjusting     Boolean       @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  lines           JournalLine[]
+  receipts        Receipt[]
+  depreciationRecords DepreciationRecord[]
+}
+
+// 仕訳明細 (Journal Line)
+model JournalLine {
+  id               Int          @id @default(autoincrement())
+  journalEntryId   Int
+  accountId        Int
+  debitAmount      Int          @default(0)
+  creditAmount     Int          @default(0)
+  description      String?
+  allocationPercent Int         @default(100) // 家事按分: 事業割合 1–100（100=全額事業）
+  journalEntry     JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account          Account      @relation(fields: [accountId], references: [id])
+
+  @@index([journalEntryId])
+  @@index([accountId])
+}
+
+// 領収書 (Receipt)
+model Receipt {
+  id             Int          @id @default(autoincrement())
+  journalEntryId Int?
+  filePath       String
+  originalName   String
+  mimeType       String
+  fileSize       Int
+  uploadedAt     DateTime     @default(now())
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+
+  @@index([journalEntryId])
+}
+
+// 設定 (Settings)
+model Setting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// 会計年度 (Fiscal Year)
+model FiscalYear {
+  id        Int      @id @default(autoincrement())
+  year      Int      @unique
+  startDate DateTime
+  endDate   DateTime
+  isClosed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// 固定資産 (Fixed Asset) - 固定資産台帳用
+model FixedAsset {
+  id                Int       @id @default(autoincrement())
+  name              String    // 資産名（例: パソコン、車両）
+  acquisitionDate   DateTime  // 取得日
+  cost              Int       // 取得価額（円）
+  usefulLifeYears   Int       // 耐用年数（年）
+  depreciationMethod String   @default("straight_line") // "straight_line" 定額法
+  assetAccountId    Int       // 資産勘定（建物・車両等）
+  expenseAccountId  Int       // 減価償却費勘定
+  memo              String?
+  createdAt         DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  assetAccount     Account   @relation("FixedAssetAsset", fields: [assetAccountId], references: [id])
+  expenseAccount   Account   @relation("FixedAssetExpense", fields: [expenseAccountId], references: [id])
+  depreciationRecords DepreciationRecord[]
+
+  @@index([assetAccountId])
+  @@index([expenseAccountId])
+}
+
+// 減価償却記録（年度ごとの償却額）
+model DepreciationRecord {
+  id             Int          @id @default(autoincrement())
+  fixedAssetId   Int
+  fiscalYear     Int
+  amount         Int          // その年度の償却額
+  journalEntryId Int?         // 紐付く仕訳（任意）
+  createdAt      DateTime     @default(now())
+  fixedAsset     FixedAsset   @relation(fields: [fixedAssetId], references: [id], onDelete: Cascade)
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+
+  @@unique([fixedAssetId, fiscalYear])
+  @@index([fixedAssetId])
+  @@index([fiscalYear])
+}
+
+// 棚卸品目（棚卸表用）
+model InventoryItem {
+  id         Int      @id @default(autoincrement())
+  fiscalYear Int      // 対象年度（期末棚卸）
+  name       String   // 品目名
+  quantity   Float    @default(0)  // 数量
+  unitPrice  Int      @default(0) // 単価（円）
+  amount     Int      @default(0) // 金額（円）= quantity * unitPrice または手入力
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([fiscalYear])
+}
+
+// 取引先 (Client)
+model Client {
+  id            Int      @id @default(autoincrement())
+  name          String   // 取引先名（例: 株式会社ABC）
+  honorific     String   @default("御中") // "御中" | "様"
+  contactPerson String?  // 担当者名
+  postalCode    String?  // 郵便番号
+  address       String?  // 住所
+  phone         String?  // 電話番号
+  email         String?  // メールアドレス
+  memo          String?  // メモ
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  documents     BusinessDocument[]
+}
+
+// 書類 (Business Document: 請求書・見積書・納品書)
+model BusinessDocument {
+  id                 Int      @id @default(autoincrement())
+  type               String   // "invoice" | "quotation" | "delivery"
+  documentNumber     String   @unique // e.g., "INV-2026-001"
+  clientId           Int
+  issueDate          DateTime // 発行日
+  dueDate            DateTime? // 支払期限 (invoices only)
+  subject            String?  // 件名
+  notes              String?  // 備考
+  status             String   @default("draft") // "draft" | "sent" | "paid" | "cancelled"
+  subtotal           Int      @default(0) // 小計
+  taxRate            Int      @default(10) // 消費税率 (percent)
+  taxAmount          Int      @default(0) // 消費税額
+  total              Int      @default(0) // 合計金額
+  sourceDocumentId   Int?     // 変換元の書類ID（見積書→請求書など）
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  client             Client   @relation(fields: [clientId], references: [id])
+  sourceDocument     BusinessDocument?  @relation("DocumentConversion", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  derivedDocuments   BusinessDocument[] @relation("DocumentConversion")
+  lines              DocumentLine[]
+
+  @@index([clientId])
+  @@index([type])
+  @@index([status])
+  @@index([sourceDocumentId])
+}
+
+// 仕訳変更履歴（優良電子帳簿要件対応）
+model JournalAuditLog {
+  id             Int      @id @default(autoincrement())
+  journalEntryId Int      // 対象仕訳ID（削除後も保持）
+  action         String   // "create" | "update" | "delete"
+  beforeData     String?  // 変更前データ（JSON）
+  afterData      String?  // 変更後データ（JSON）
+  changedAt      DateTime @default(now())
+
+  @@index([journalEntryId])
+  @@index([changedAt])
+}
+
+// 書類明細行 (Document Line Item)
+model DocumentLine {
+  id          Int      @id @default(autoincrement())
+  documentId  Int
+  description String   // 品名・内容
+  quantity    Float    @default(1)
+  unitPrice   Int      @default(0) // 単価（円）
+  amount      Int      @default(0) // 金額 = quantity * unitPrice
+  taxRate     Int      @default(10) // 行ごとの税率 (8% or 10%)
+  sortOrder   Int      @default(0)
+  document    BusinessDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
