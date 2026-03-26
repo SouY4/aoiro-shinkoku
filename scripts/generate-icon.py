@@ -22,7 +22,7 @@ def draw_icon(size):
                    fill=(255, 255, 255, 120))
     return img
 
-base = draw_icon(256)
+base = draw_icon(512)
 
 # ICO (Windows)
 base.save(
