@@ -2,8 +2,25 @@ const { app, BrowserWindow, shell, utilityProcess } = require('electron');
 const path = require('path');
 const net = require('net');
 const { spawn } = require('child_process');
+const fs = require('fs');
 
 const isDev = process.env.NODE_ENV !== 'production' || !app.isPackaged;
+
+// ログファイル（パッケージ版のデバッグ用）
+let logStream = null;
+function setupLog() {
+  if (isDev) return;
+  const logDir = app.getPath('logs');
+  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+  const logPath = path.join(logDir, 'main.log');
+  logStream = fs.createWriteStream(logPath, { flags: 'a' });
+  logStream.write(`\n--- startup ${new Date().toISOString()} ---\n`);
+}
+function log(...args) {
+  const msg = args.join(' ');
+  console.log(msg);
+  if (logStream) logStream.write(msg + '\n');
+}
 let nextProcess = null;
 // Electron 開発時は普段使われないポートを固定で使用（3000 との競合・ロック競合を防ぐ）
 const ELECTRON_DEV_PORT = 39452;
@@ -77,18 +94,25 @@ function startNextServer(port) {
       setTimeout(() => { if (!resolved) tryConnect(); }, 5000);
     } else {
       // 本番: Electron 組み込みの Node.js (utilityProcess) で server.js を起動
-      // ユーザー環境に Node.js がインストールされていなくても動作する
       const serverJs = path.join(appPath, 'server.js');
+      log('server.js path:', serverJs);
+      log('server.js exists:', fs.existsSync(serverJs));
+      log('appPath:', appPath);
+      log('dbPath:', dbPath, 'exists:', fs.existsSync(dbPath));
+
       nextProcess = utilityProcess.fork(serverJs, [], {
         cwd: appPath, env, stdio: 'pipe',
       });
       nextProcess.stdout.on('data', (d) => {
+        log('[server stdout]', d.toString().trim());
         if (d.toString().includes('Ready') && !resolved) { resolved = true; resolve(); }
       });
       nextProcess.stderr.on('data', (d) => {
+        log('[server stderr]', d.toString().trim());
         if (d.toString().includes('Ready') && !resolved) { resolved = true; resolve(); }
       });
       nextProcess.on('exit', (code) => {
+        log('server.js exited with code:', code);
         if (code && !resolved) { resolved = true; reject(new Error(`server.js exited: ${code}`)); }
       });
       setTimeout(() => { if (!resolved) tryConnect(); }, 2000);
@@ -124,17 +148,20 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  const fs = require('fs');
+  setupLog();
   try {
     const appPath = getNextAppPath();
-    // dataディレクトリが存在することを確認（DBはビルド時に同梱済み）
+    log('appPath:', appPath);
+    log('isDev:', isDev);
     const dataDir = path.join(appPath, 'data');
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     const port = isDev ? serverPort : await getAvailablePort(serverPort);
+    log('port:', port);
     await startNextServer(port);
+    log('server started, creating window');
     createWindow();
   } catch (err) {
-    console.error('Failed to start Next.js:', err);
+    log('ERROR:', err.message, err.stack);
     app.quit();
   }
 });
