@@ -7,7 +7,16 @@ const path = require('path');
 const fs = require('fs');
 
 exports.default = async function afterPack(context) {
-  const appNodeModules = path.join(context.appOutDir, 'resources', 'app', 'node_modules');
+  // Mac はアプリバンドル構造が異なる
+  const platform = context.packager.platform.nodeName; // 'darwin' | 'win32' | 'linux'
+  let resourcesBase;
+  if (platform === 'darwin') {
+    const appName = context.packager.appInfo.productFilename;
+    resourcesBase = path.join(context.appOutDir, `${appName}.app`, 'Contents', 'Resources');
+  } else {
+    resourcesBase = path.join(context.appOutDir, 'resources');
+  }
+  const appNodeModules = path.join(resourcesBase, 'app', 'node_modules');
   const srcNodeModules = path.join(__dirname, '..', 'node_modules');
 
   if (!fs.existsSync(appNodeModules)) {

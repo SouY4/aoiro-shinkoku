@@ -49,6 +49,11 @@ jobs:
       - name: Generate Prisma client
         run: pnpm prisma generate
 
+      - name: Initialize database (create empty schema for bundling)
+        run: pnpm prisma migrate deploy
+        env:
+          DATABASE_URL: file:./data/database.sqlite
+
       - name: Build
         run: pnpm run electron:build
         env:

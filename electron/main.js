@@ -123,34 +123,13 @@ function createWindow() {
   win.loadURL(url);
 }
 
-async function runMigrations(appPath) {
-  if (isDev) return; // 開発時は pnpm prisma migrate dev で管理
-  const dbPath = path.join(appPath, 'data', 'database.sqlite');
-  if (fs.existsSync(dbPath)) return; // 既存DBがあればスキップ
-
-  // 初回起動時のみ: prisma migrate deploy を実行してテーブルを作成
-  const { execFileSync } = require('child_process');
-  const prismaBin = path.join(appPath, 'node_modules', '.bin', 'prisma');
-  const env = {
-    ...process.env,
-    DATABASE_URL: `file:${dbPath}`,
-    PRISMA_SCHEMA_PATH: path.join(appPath, 'prisma', 'schema.prisma'),
-  };
-  try {
-    execFileSync(prismaBin, ['migrate', 'deploy', '--schema', path.join(appPath, 'prisma', 'schema.prisma')], {
-      cwd: appPath, env, stdio: 'pipe',
-    });
-  } catch (e) {
-    console.error('Migration failed:', e.stderr?.toString());
-    throw e;
-  }
-}
-
 app.whenReady().then(async () => {
   const fs = require('fs');
   try {
     const appPath = getNextAppPath();
-    if (!isDev) await runMigrations(appPath);
+    // dataディレクトリが存在することを確認（DBはビルド時に同梱済み）
+    const dataDir = path.join(appPath, 'data');
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     const port = isDev ? serverPort : await getAvailablePort(serverPort);
     await startNextServer(port);
     createWindow();
