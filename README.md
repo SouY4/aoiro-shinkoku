@@ -56,10 +56,10 @@
 
 Node.js 不要。インストーラーをダウンロードしてそのまま使えます。
 
-| OS | ファイル |
-|----|---------|
-| Windows | [Releases](https://github.com/SouY4/aoiro-shinkoku/releases/latest) から `.exe` をダウンロード |
-| Mac | [Releases](https://github.com/SouY4/aoiro-shinkoku/releases/latest) から `.dmg` をダウンロード |
+| OS | ダウンロード |
+|----|------------|
+| Windows | [AoiroShinkoku-Setup.exe](https://github.com/SouY4/aoiro-shinkoku/releases/latest/download/AoiroShinkoku-Setup.exe) |
+| Mac | [AoiroShinkoku.dmg](https://github.com/SouY4/aoiro-shinkoku/releases/latest/download/AoiroShinkoku.dmg) |
 
 > **Windows：初回起動時の警告について**
 > 「Windows によって PC が保護されました」と表示されたら「詳細情報 → 実行」をクリック
