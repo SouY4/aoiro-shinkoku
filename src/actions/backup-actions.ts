@@ -4,7 +4,10 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
-const DB_PATH = path.join(process.cwd(), "prisma", "data", "database.sqlite");
+// DATABASE_URL は "file:./data/database.sqlite" または "file:/abs/path/database.sqlite"
+const dbUrl = process.env.DATABASE_URL ?? "file:./data/database.sqlite";
+const dbRelPath = dbUrl.startsWith("file:") ? dbUrl.slice(5) : dbUrl;
+const DB_PATH = path.resolve(process.cwd(), dbRelPath);
 const BACKUP_DIR = path.join(os.homedir(), "AoiroShinkoku", "backups");
 
 export async function createBackup(): Promise<{ name: string; path: string }> {
