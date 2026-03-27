@@ -21,6 +21,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   installerLanguages:
     - ja
+  compression: store
 mac:
   target:
     - target: dmg
