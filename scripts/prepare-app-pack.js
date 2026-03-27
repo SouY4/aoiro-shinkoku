@@ -49,6 +49,23 @@ if (fs.existsSync(dataDir)) {
   fs.mkdirSync(path.join(dest, 'data'), { recursive: true });
 }
 
+// 6. standalone が含まない Next.js 実行時依存モジュールを補完
+// pnpm のシンボリックリンク構造により Next.js のファイルトレーサーが検出できないことがある
+console.log('Copy missing runtime modules');
+const missingModules = ['styled-jsx'];
+for (const mod of missingModules) {
+  const destMod = path.join(dest, 'node_modules', mod);
+  if (fs.existsSync(destMod)) continue; // standalone が既に含む場合はスキップ
+  try {
+    const pkgJson = require.resolve(`${mod}/package.json`, { paths: [root] });
+    const srcMod = path.dirname(pkgJson);
+    copyRecursive(srcMod, destMod);
+    console.log(`  Copied ${mod}`);
+  } catch {
+    console.warn(`  Warning: ${mod} not found, skipping`);
+  }
+}
+
 // ネイティブ .node ファイルは afterPack フック（scripts/after-pack.js）でコピーする
 // electron-builder が Electron 用に再ビルドした後に上書きするため、ここでは不要
 
