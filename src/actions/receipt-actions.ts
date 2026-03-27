@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { writeFile, unlink, mkdir } from "fs/promises";
 import path from "path";
 
-const RECEIPTS_DIR = path.join(process.cwd(), "data", "receipts");
+const RECEIPTS_DIR = process.env.RECEIPTS_DIR ?? path.join(process.cwd(), "data", "receipts");
 
 export async function uploadReceipt(formData: FormData) {
   const file = formData.get("file") as File;

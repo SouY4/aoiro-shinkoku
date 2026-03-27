@@ -48,18 +48,30 @@ function getNextAppPath() {
   return path.join(process.resourcesPath, 'app');
 }
 
+function getUserDataDbPath() {
+  // AppData/Roaming/AoiroShinkoku/database.sqlite
+  // Electron アプリと MCP サーバーが同じ DB を共有するための固定パス
+  const userDataDir = app.getPath('userData');
+  return path.join(userDataDir, 'database.sqlite');
+}
+
 function startNextServer(port) {
   serverPort = port;
   return new Promise((resolve, reject) => {
     const appPath = getNextAppPath();
-    const dataDir = path.join(appPath, 'data');
-    const dbPath = path.join(dataDir, 'database.sqlite');
+    const dbPath = isDev
+      ? path.join(appPath, 'data', 'database.sqlite')
+      : getUserDataDbPath();
+    const receiptsDir = isDev
+      ? path.join(appPath, 'data', 'receipts')
+      : path.join(app.getPath('userData'), 'receipts');
     const env = {
       ...process.env,
       NODE_ENV: isDev ? 'development' : 'production',
       PORT: String(port),
       HOSTNAME: '127.0.0.1',
       DATABASE_URL: process.env.DATABASE_URL || `file:${dbPath}`,
+      RECEIPTS_DIR: receiptsDir,
     };
 
     let resolved = false;
@@ -153,8 +165,18 @@ app.whenReady().then(async () => {
     const appPath = getNextAppPath();
     log('appPath:', appPath);
     log('isDev:', isDev);
-    const dataDir = path.join(appPath, 'data');
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    // DBはAppData配下に配置（MCP・Electronで共有、再インストールでデータ消えない）
+    const dbPath = getUserDataDbPath();
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+    // 初回起動時: バンドルされた初期化済みDBをコピー
+    if (!fs.existsSync(dbPath)) {
+      const templateDb = path.join(appPath, 'data', 'database.sqlite');
+      if (fs.existsSync(templateDb)) {
+        fs.copyFileSync(templateDb, dbPath);
+        log('Copied template DB to', dbPath);
+      }
+    }
     const port = isDev ? serverPort : await getAvailablePort(serverPort);
     log('port:', port);
     await startNextServer(port);

@@ -58,8 +58,9 @@ Node.js 不要。インストーラーをダウンロードしてそのまま使
 
 | OS | ダウンロード |
 |----|------------|
-| Windows | [AoiroShinkoku-Setup.exe](https://github.com/SouY4/aoiro-shinkoku/releases/latest/download/AoiroShinkoku-Setup.exe) |
-| Mac | [AoiroShinkoku.dmg](https://github.com/SouY4/aoiro-shinkoku/releases/latest/download/AoiroShinkoku.dmg) |
+| Windows (x64) | [AoiroShinkoku-Setup.exe](https://github.com/SouY4/aoiro-shinkoku/releases/latest/download/AoiroShinkoku-Setup.exe) |
+| Mac (Apple Silicon / M1〜) | [AoiroShinkoku-arm64.dmg](https://github.com/SouY4/aoiro-shinkoku/releases/latest/download/AoiroShinkoku-arm64.dmg) |
+| Mac (Intel) | [AoiroShinkoku-x64.dmg](https://github.com/SouY4/aoiro-shinkoku/releases/latest/download/AoiroShinkoku-x64.dmg) |
 
 > **Windows：初回起動時の警告について**
 > 「Windows によって PC が保護されました」と表示されたら「詳細情報 → 実行」をクリック
@@ -157,7 +158,10 @@ MCP（Model Context Protocol）を使うと、Claude Desktop や Claude Code か
     "aoiro-shinkoku": {
       "command": "C:\\Users\\<ユーザー名>\\AppData\\Local\\pnpm\\pnpm.cmd",
       "args": ["run", "mcp"],
-      "cwd": "C:\\Users\\<ユーザー名>\\Downloads\\AoiroShinkoku"
+      "cwd": "C:\\Users\\<ユーザー名>\\Downloads\\AoiroShinkoku",
+      "env": {
+        "DATABASE_URL": "file:C:\\Users\\<ユーザー名>\\AppData\\Roaming\\AoiroShinkoku\\database.sqlite"
+      }
     }
   }
 }
@@ -173,7 +177,10 @@ MCP（Model Context Protocol）を使うと、Claude Desktop や Claude Code か
     "aoiro-shinkoku": {
       "command": "/opt/homebrew/bin/pnpm",
       "args": ["run", "mcp"],
-      "cwd": "/Users/<ユーザー名>/Downloads/AoiroShinkoku"
+      "cwd": "/Users/<ユーザー名>/Downloads/AoiroShinkoku",
+      "env": {
+        "DATABASE_URL": "file:/Users/<ユーザー名>/Library/Application Support/AoiroShinkoku/database.sqlite"
+      }
     }
   }
 }
@@ -198,7 +205,10 @@ MCP（Model Context Protocol）を使うと、Claude Desktop や Claude Code か
       "type": "stdio",
       "command": "pnpm",
       "args": ["run", "mcp"],
-      "cwd": "C:\\Users\\<ユーザー名>\\Downloads\\AoiroShinkoku"
+      "cwd": "C:\\Users\\<ユーザー名>\\Downloads\\AoiroShinkoku",
+      "env": {
+        "DATABASE_URL": "file:C:\\Users\\<ユーザー名>\\AppData\\Roaming\\AoiroShinkoku\\database.sqlite"
+      }
     }
   }
 }
@@ -213,7 +223,10 @@ MCP（Model Context Protocol）を使うと、Claude Desktop や Claude Code か
       "type": "stdio",
       "command": "pnpm",
       "args": ["run", "mcp"],
-      "cwd": "/Users/<ユーザー名>/Downloads/AoiroShinkoku"
+      "cwd": "/Users/<ユーザー名>/Downloads/AoiroShinkoku",
+      "env": {
+        "DATABASE_URL": "file:/Users/<ユーザー名>/Library/Application Support/AoiroShinkoku/database.sqlite"
+      }
     }
   }
 }
