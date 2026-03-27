@@ -49,28 +49,7 @@ if (fs.existsSync(dataDir)) {
   fs.mkdirSync(path.join(dest, 'data'), { recursive: true });
 }
 
-// 6. ネイティブモジュール（.nodeファイル）をstandalone/node_modulesに追加
-// standaloneはJSのみトレースするため、.nodeバイナリは手動コピーが必要
-console.log('Copy native .node files');
-function copyNativeFiles(srcDir, dstDir) {
-  if (!fs.existsSync(srcDir)) return;
-  let entries;
-  try { entries = fs.readdirSync(srcDir, { withFileTypes: true }); }
-  catch { return; }
-  for (const entry of entries) {
-    const srcPath = path.join(srcDir, entry.name);
-    const dstPath = path.join(dstDir, entry.name);
-    if (entry.isSymbolicLink()) continue;
-    if (entry.isDirectory()) {
-      copyNativeFiles(srcPath, dstPath);
-    } else if (entry.name.endsWith('.node')) {
-      if (!fs.existsSync(path.dirname(dstPath))) {
-        fs.mkdirSync(path.dirname(dstPath), { recursive: true });
-      }
-      fs.copyFileSync(srcPath, dstPath);
-    }
-  }
-}
-copyNativeFiles(path.join(root, 'node_modules'), path.join(dest, 'node_modules'));
+// ネイティブ .node ファイルは afterPack フック（scripts/after-pack.js）でコピーする
+// electron-builder が Electron 用に再ビルドした後に上書きするため、ここでは不要
 
 console.log('next-app ready');

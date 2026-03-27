@@ -17,6 +17,7 @@ win:
       arch:
         - x64
 compression: store
+afterPack: scripts/after-pack.js
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
