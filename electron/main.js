@@ -4,7 +4,7 @@ const net = require('net');
 const { spawn } = require('child_process');
 const fs = require('fs');
 
-const isDev = process.env.NODE_ENV !== 'production' || !app.isPackaged;
+const isDev = !app.isPackaged;
 
 // ログファイル（パッケージ版のデバッグ用）
 let logStream = null;

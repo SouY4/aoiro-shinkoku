@@ -54,6 +54,8 @@
 
 ## ダウンロード（ビルド済みインストーラー）
 
+[![GitHub Release](https://img.shields.io/github/v/release/SouY4/aoiro-shinkoku)](https://github.com/SouY4/aoiro-shinkoku/releases/latest)
+
 Node.js 不要。インストーラーをダウンロードしてそのまま使えます。
 
 | OS | ダウンロード |
