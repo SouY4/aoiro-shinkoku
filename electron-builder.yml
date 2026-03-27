@@ -16,12 +16,12 @@ win:
     - target: nsis
       arch:
         - x64
+compression: store
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   installerLanguages:
     - ja
-  compression: store
 mac:
   target:
     - target: dmg

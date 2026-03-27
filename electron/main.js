@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, utilityProcess } = require('electron');
 const path = require('path');
 const net = require('net');
 const { spawn } = require('child_process');
@@ -45,85 +45,54 @@ function startNextServer(port) {
       DATABASE_URL: process.env.DATABASE_URL || `file:${dbPath}`,
     };
 
-    // Electron では process.execPath が electron 本体を指すため、Node は PATH の node を使う
-    const nodeCmd = process.platform === 'win32' ? 'node.exe' : 'node';
-    let args;
-    if (isDev) {
-      const nextBin = path.join(appPath, 'node_modules', 'next', 'dist', 'bin', 'next');
-      args = [nextBin, 'dev', '--port', String(port), '--hostname', '127.0.0.1'];
-    } else {
-      // standalone モード: server.js を直接起動
-      args = [path.join(appPath, 'server.js')];
-    }
-    nextProcess = spawn(nodeCmd, args, {
-      cwd: appPath,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
     let resolved = false;
     const tryConnect = () => {
       const http = require('http');
-      const req = http.get(`http://127.0.0.1:${port}`, (res) => {
-        if (!resolved) {
-          resolved = true;
-          resolve();
-        }
+      const req = http.get(`http://127.0.0.1:${port}`, () => {
+        if (!resolved) { resolved = true; resolve(); }
       });
-      req.on('error', () => {
-        if (!resolved) setTimeout(tryConnect, 200);
-      });
+      req.on('error', () => { if (!resolved) setTimeout(tryConnect, 300); });
       req.setTimeout(1000, () => req.destroy());
     };
 
-    const startTimeout = setTimeout(() => {
-      tryConnect();
-    }, isDev ? 3000 : 1000);
-
-    let stderrLog = '';
-    nextProcess.stdout.on('data', (data) => {
-      const str = data.toString();
-      if (str.includes('Ready') || str.includes('started')) {
-        clearTimeout(startTimeout);
-        if (!resolved) {
-          resolved = true;
-          resolve();
-        }
-      }
-    });
-
-    nextProcess.stderr.on('data', (data) => {
-      const str = data.toString();
-      stderrLog += str;
-      if (str.includes('Ready') || str.includes('started')) {
-        clearTimeout(startTimeout);
-        if (!resolved) {
-          resolved = true;
-          resolve();
-        }
-      }
-    });
-
-    nextProcess.on('error', (err) => {
-      if (!resolved) {
-        resolved = true;
-        reject(err);
-      }
-    });
-
-    nextProcess.on('exit', (code) => {
-      if (code !== null && code !== 0 && !resolved) {
-        resolved = true;
-        if (stderrLog) console.error('Next.js stderr:', stderrLog);
-        reject(new Error(`Next.js exited with code ${code}`));
-      }
-    });
-
-    setTimeout(() => {
-      if (!resolved) {
-        tryConnect();
-      }
-    }, isDev ? 5000 : 3000);
+    if (isDev) {
+      // 開発時: システムの node を使って next dev を起動
+      const nodeCmd = process.platform === 'win32' ? 'node.exe' : 'node';
+      const nextBin = path.join(appPath, 'node_modules', 'next', 'dist', 'bin', 'next');
+      nextProcess = spawn(nodeCmd, [nextBin, 'dev', '--port', String(port), '--hostname', '127.0.0.1'], {
+        cwd: appPath, env, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let stderrLog = '';
+      nextProcess.stdout.on('data', (d) => {
+        if (d.toString().includes('Ready') && !resolved) { resolved = true; resolve(); }
+      });
+      nextProcess.stderr.on('data', (d) => {
+        const s = d.toString(); stderrLog += s;
+        if (s.includes('Ready') && !resolved) { resolved = true; resolve(); }
+      });
+      nextProcess.on('error', (err) => { if (!resolved) { resolved = true; reject(err); } });
+      nextProcess.on('exit', (code) => {
+        if (code && !resolved) { resolved = true; reject(new Error(`Next.js exited: ${code}\n${stderrLog}`)); }
+      });
+      setTimeout(() => { if (!resolved) tryConnect(); }, 5000);
+    } else {
+      // 本番: Electron 組み込みの Node.js (utilityProcess) で server.js を起動
+      // ユーザー環境に Node.js がインストールされていなくても動作する
+      const serverJs = path.join(appPath, 'server.js');
+      nextProcess = utilityProcess.fork(serverJs, [], {
+        cwd: appPath, env, stdio: 'pipe',
+      });
+      nextProcess.stdout.on('data', (d) => {
+        if (d.toString().includes('Ready') && !resolved) { resolved = true; resolve(); }
+      });
+      nextProcess.stderr.on('data', (d) => {
+        if (d.toString().includes('Ready') && !resolved) { resolved = true; resolve(); }
+      });
+      nextProcess.on('exit', (code) => {
+        if (code && !resolved) { resolved = true; reject(new Error(`server.js exited: ${code}`)); }
+      });
+      setTimeout(() => { if (!resolved) tryConnect(); }, 2000);
+    }
   });
 }
 
