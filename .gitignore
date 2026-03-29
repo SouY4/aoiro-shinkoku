@@ -7,6 +7,7 @@ node_modules
 out
 build
 .vercel
+next-env.d.ts
 
 # Env (secrets)
 .env
