@@ -3,7 +3,7 @@ productName: AoiroShinkoku
 publish:
   provider: github
   owner: SouY4
-  repo: AoiroShinkoku
+  repo: aoiro-shinkoku
 directories:
   output: dist
   buildResources: build
