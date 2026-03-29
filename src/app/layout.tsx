@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
+import UpdateBanner from "@/components/UpdateBanner";
 import {
   LayoutDashboard,
   BookOpen,
@@ -79,6 +80,7 @@ export default function RootLayout({
             </div>
           </main>
         </div>
+        <UpdateBanner />
       </body>
     </html>
   );

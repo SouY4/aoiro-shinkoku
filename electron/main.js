@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, utilityProcess } = require('electron');
+const { app, BrowserWindow, shell, utilityProcess, ipcMain } = require('electron');
 const path = require('path');
 const net = require('net');
 const { spawn } = require('child_process');
@@ -195,3 +195,26 @@ app.on('window-all-closed', () => {
   }
   app.quit();
 });
+
+// ---- 自動アップデート ----
+if (!isDev) {
+  const { autoUpdater } = require('electron-updater');
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = false;
+
+  autoUpdater.on('update-downloaded', (info) => {
+    log('update-downloaded:', info.version);
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) win.webContents.send('update-downloaded', { version: info.version });
+  });
+  autoUpdater.on('error', (err) => log('autoUpdater error:', err.message));
+
+  ipcMain.on('install-update', () => {
+    autoUpdater.quitAndInstall();
+  });
+
+  app.whenReady().then(() => {
+    // ウィンドウが準備できてから確認する（起動直後の負荷を避ける）
+    setTimeout(() => autoUpdater.checkForUpdates().catch((e) => log('checkForUpdates error:', e.message)), 5000);
+  });
+}

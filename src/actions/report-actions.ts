@@ -211,9 +211,27 @@ export async function getMonthlySales(fiscalYear: number) {
 
 export async function getBusinessSummary(fiscalYear: number) {
   const is = await getIncomeStatement(fiscalYear);
+
+  // 按分経費（allocationPercent < 100 の operating 経費の事業按分後合計）を別途集計
+  const startDate = new Date(fiscalYear, 0, 1);
+  const endDate = new Date(fiscalYear + 1, 0, 1);
+  const proportionalLines = await prisma.journalLine.findMany({
+    where: {
+      journalEntry: { date: { gte: startDate, lt: endDate } },
+      account: { type: "expense", category: "operating" },
+      allocationPercent: { lt: 100 },
+    },
+    select: { debitAmount: true, creditAmount: true, allocationPercent: true },
+  });
+  const totalProportionalExpenses = proportionalLines.reduce((sum, line) => {
+    const ratio = (line.allocationPercent ?? 100) / 100;
+    return sum + Math.round((line.debitAmount - line.creditAmount) * ratio);
+  }, 0);
+
   return {
     totalRevenue: is.totalRevenue,
     totalExpenses: is.totalCogs + is.totalExpenses,
+    totalProportionalExpenses,
     operatingIncome: is.operatingIncome,
     netIncome: is.netIncome,
   };

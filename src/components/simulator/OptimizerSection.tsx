@@ -11,7 +11,7 @@ import {
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
-  AreaChart, Area, ReferenceLine,
+  AreaChart, Area, ReferenceLine, ReferenceDot,
 } from "recharts";
 
 function formatYen(value: number): string {
@@ -34,34 +34,37 @@ interface Props {
   initialSalaryRevenue: number;
   initialBusinessRevenue: number;
   initialBusinessExpenses: number;
+  initialProportionalExpenses: number;
 }
 
 export default function OptimizerSection({
   initialSalaryRevenue,
   initialBusinessRevenue,
   initialBusinessExpenses,
+  initialProportionalExpenses,
 }: Props) {
   const [useExisting, setUseExisting] = useState(true);
 
   // 万円単位で入力
   const [salaryMan, setSalaryMan] = useState(Math.round(initialSalaryRevenue / 10_000));
   const [revenueMan, setRevenueMan] = useState(Math.round(initialBusinessRevenue / 10_000));
-  const [expensesMan, setExpensesMan] = useState(Math.round(initialBusinessExpenses / 10_000));
-  const [proportionalMan, setProportionalMan] = useState(0);
+  const [expensesMan, setExpensesMan] = useState(Math.round((initialBusinessExpenses - initialProportionalExpenses) / 10_000));
+  const [proportionalMan, setProportionalMan] = useState(Math.round(initialProportionalExpenses / 10_000));
   const [payPension, setPayPension] = useState(true);
 
   // 既存値(万円)
   const existingSalaryMan = Math.round(initialSalaryRevenue / 10_000);
   const existingRevenueMan = Math.round(initialBusinessRevenue / 10_000);
-  const existingExpensesMan = Math.round(initialBusinessExpenses / 10_000);
+  const existingExpensesMan = Math.round((initialBusinessExpenses - initialProportionalExpenses) / 10_000);
+  const existingProportionalMan = Math.round(initialProportionalExpenses / 10_000);
 
   const input: OptimizerInput = useMemo(() => ({
     salaryRevenue: (useExisting ? existingSalaryMan : salaryMan) * 10_000,
     businessRevenue: (useExisting ? existingRevenueMan : revenueMan) * 10_000,
     expenses: (useExisting ? existingExpensesMan : expensesMan) * 10_000,
-    proportionalExpenses: proportionalMan * 10_000,
+    proportionalExpenses: (useExisting ? existingProportionalMan : proportionalMan) * 10_000,
     payNationalPension: payPension,
-  }), [useExisting, salaryMan, revenueMan, expensesMan, proportionalMan, payPension, existingSalaryMan, existingRevenueMan, existingExpensesMan]);
+  }), [useExisting, salaryMan, revenueMan, expensesMan, proportionalMan, payPension, existingSalaryMan, existingRevenueMan, existingExpensesMan, existingProportionalMan]);
 
   const comparison = useMemo(() => calculateComparison(input), [input]);
   const r = comparison.current;
@@ -107,6 +110,7 @@ export default function OptimizerSection({
                   setSalaryMan(existingSalaryMan);
                   setRevenueMan(existingRevenueMan);
                   setExpensesMan(existingExpensesMan);
+                  setProportionalMan(existingProportionalMan);
                 }
               }}
               className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
@@ -123,6 +127,7 @@ export default function OptimizerSection({
             max={300}
             disabled={useExisting}
             hint="アルバイト等の年間額面収入"
+            exactValue={useExisting ? initialSalaryRevenue : undefined}
           />
           <SliderInput
             label="事業の売上"
@@ -131,6 +136,7 @@ export default function OptimizerSection({
             max={500}
             disabled={useExisting}
             hint="フリーランスの年間売上"
+            exactValue={useExisting ? initialBusinessRevenue : undefined}
           />
           <SliderInput
             label="必要経費（PC等）"
@@ -139,14 +145,16 @@ export default function OptimizerSection({
             max={200}
             disabled={useExisting}
             hint="事業にかかった経費（手元に物品が残る）"
+            exactValue={useExisting ? initialBusinessExpenses - initialProportionalExpenses : undefined}
           />
           <SliderInput
             label="按分経費（家賃等）"
-            value={proportionalMan}
+            value={useExisting ? existingProportionalMan : proportionalMan}
             onChange={setProportionalMan}
             max={100}
-            disabled={false}
+            disabled={useExisting}
             hint="家賃・通信費等の按分額（追加出費なし）"
+            exactValue={useExisting ? initialProportionalExpenses : undefined}
           />
         </div>
 
@@ -305,16 +313,21 @@ export default function OptimizerSection({
 
 // ── スライダー入力 ─────────────────────────────────────
 function SliderInput({
-  label, value, onChange, max, disabled, hint,
+  label, value, onChange, max, disabled, hint, exactValue,
 }: {
   label: string; value: number; onChange: (v: number) => void;
-  max: number; disabled: boolean; hint: string;
+  max: number; disabled: boolean; hint: string; exactValue?: number;
 }) {
   return (
     <div className={disabled ? "opacity-70" : ""}>
       <div className="flex items-center justify-between mb-1">
         <label className="text-sm font-medium text-gray-700">{label}</label>
-        <span className="text-sm font-bold text-gray-900">{value}万円</span>
+        <div className="text-right">
+          <span className="text-sm font-bold text-gray-900">{value}万円</span>
+          {exactValue !== undefined && exactValue !== value * 10_000 && (
+            <span className="block text-xs text-gray-400">実値 {exactValue.toLocaleString()}円</span>
+          )}
+        </div>
       </div>
       <input
         type="range"
@@ -471,14 +484,22 @@ function ChartsSection({ result: r, comparison, input }: { result: OptimizerResu
     isDependant: boolean;
     totalIncome: number;
     isWorkingStudentEligible: boolean;
+    isCurrent?: boolean;
   }
+  const currentRevenueMan = Math.round(input.businessRevenue / 10_000);
+
   const curveData = useMemo(() => {
     const points: CurvePoint[] = [];
     const baseExpenses = input.expenses;
     const baseProp = input.proportionalExpenses;
     const baseSalary = input.salaryRevenue;
+    const revSteps = new Set<number>();
     // 売上0〜300万を5万刻み
-    for (let rev = 0; rev <= 3_000_000; rev += 50_000) {
+    for (let rev = 0; rev <= 3_000_000; rev += 50_000) revSteps.add(rev);
+    // 現在地を正確に含める
+    revSteps.add(input.businessRevenue);
+    const sortedRevs = Array.from(revSteps).sort((a, b) => a - b);
+    for (const rev of sortedRevs) {
       const trial = calculateOptimizer({
         salaryRevenue: baseSalary,
         businessRevenue: rev,
@@ -494,12 +515,11 @@ function ChartsSection({ result: r, comparison, input }: { result: OptimizerResu
         isDependant: trial.isDependant,
         totalIncome: trial.totalIncome,
         isWorkingStudentEligible: trial.isWorkingStudentEligible,
+        isCurrent: rev === input.businessRevenue,
       });
     }
     return points;
-  }, [input.salaryRevenue, input.expenses, input.proportionalExpenses, input.payNationalPension]);
-
-  const currentRevenueMan = Math.round(input.businessRevenue / 10_000);
+  }, [input.salaryRevenue, input.businessRevenue, input.expenses, input.proportionalExpenses, input.payNationalPension]);
 
   // 各ラインの売上(万円)を計算
   // 社保扶養ライン: isDependant が false になる最初のポイント
@@ -547,7 +567,10 @@ function ChartsSection({ result: r, comparison, input }: { result: OptimizerResu
     const pt = payload[0]?.payload as CurvePoint | undefined;
     return (
       <div className="bg-white border border-gray-200 rounded-lg shadow px-3 py-2 text-sm">
-        <p className="font-medium text-gray-700">売上 {label}万円</p>
+        <p className="font-medium text-gray-700">
+          売上 {label}万円
+          {pt?.isCurrent && <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">現在</span>}
+        </p>
         {payload.map((p: { name: string; value: number; color: string }, i: number) => (
           <p key={i} style={{ color: p.color }}>{p.name}: {p.value}万円</p>
         ))}
@@ -647,12 +670,13 @@ function ChartsSection({ result: r, comparison, input }: { result: OptimizerResu
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="revenue"
+              type="number"
+              domain={[0, 300]}
               tick={{ fontSize: 11 }}
-              label={{ value: "事業売上（万円）", position: "insideBottom", offset: -18, fontSize: 11 }}
+              label={{ value: "事業売上（万円）", position: "insideBottom", offset: -22, fontSize: 11 }}
             />
             <YAxis tick={{ fontSize: 11 }} unit="万" />
             <Tooltip content={<CustomTooltipCurve />} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
             {/* 勤労学生控除 / 親の控除満額ライン (合計所得85万) */}
             {studentDeductionBorderRevMan !== null && (
               <ReferenceLine
@@ -683,7 +707,7 @@ function ChartsSection({ result: r, comparison, input }: { result: OptimizerResu
                 label={{ value: "社保扶養上限", position: "top", fill: "#ef4444", fontSize: 10 }}
               />
             )}
-            {/* 現在位置 */}
+            {/* 現在位置: 縦線 */}
             <ReferenceLine
               x={currentRevenueMan}
               stroke="#6366f1"
@@ -691,15 +715,34 @@ function ChartsSection({ result: r, comparison, input }: { result: OptimizerResu
               strokeWidth={1.5}
               label={{ value: "現在", position: "top", fill: "#6366f1", fontSize: 11 }}
             />
-            <Area
-              type="monotone"
-              dataKey="totalRevenue"
-              name="収入合計"
-              stroke="#94a3b8"
-              strokeWidth={1.5}
-              strokeDasharray="4 2"
-              fill="url(#colorTotalRev)"
+            {/* 現在位置: 各カーブ上のドット */}
+            <ReferenceDot
+              x={currentRevenueMan}
+              y={Math.round(r.cashTakeHome / 10_000)}
+              r={5}
+              fill="#6366f1"
+              stroke="#fff"
+              strokeWidth={2}
             />
+            <ReferenceDot
+              x={currentRevenueMan}
+              y={Math.round(r.usableMoney / 10_000)}
+              r={5}
+              fill="#a78bfa"
+              stroke="#fff"
+              strokeWidth={2}
+            />
+            {input.salaryRevenue > 0 && (
+              <Area
+                type="monotone"
+                dataKey="totalRevenue"
+                name="収入合計（給与+売上）"
+                stroke="#94a3b8"
+                strokeWidth={1.5}
+                strokeDasharray="4 2"
+                fill="url(#colorTotalRev)"
+              />
+            )}
             <Area
               type="monotone"
               dataKey="usableMoney"
@@ -718,9 +761,24 @@ function ChartsSection({ result: r, comparison, input }: { result: OptimizerResu
             />
           </AreaChart>
         </ResponsiveContainer>
-        <p className="text-xs text-gray-500 text-center mt-2">
-          🟡黄線: 勤労学生控除・親の控除満額ライン（所得85万）　🟠橙線: 親の控除ゼロライン（所得123万）　🔴赤線: 社保扶養上限（年収150万、国保発生）
-        </p>
+        {/* 凡例 */}
+        <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 mt-3 text-xs text-gray-600">
+          {input.salaryRevenue > 0 && (
+            <span className="flex items-center gap-1.5"><span className="inline-block w-5 border-t-2 border-dashed border-[#94a3b8]" />収入合計</span>
+          )}
+          <span className="flex items-center gap-1.5"><span className="inline-block w-5 border-t-2 border-[#a78bfa]" />使えるお金</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block w-5 border-t-2 border-[#6366f1]" />現金手取り</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block w-5 border-t-2 border-dashed border-[#6366f1]" />現在の売上</span>
+          {studentDeductionBorderRevMan !== null && (
+            <span className="flex items-center gap-1.5"><span className="inline-block w-5 border-t-2 border-dashed border-[#f59e0b]" />勤労学生/親控除満額（所得85万）</span>
+          )}
+          {parentDeductionZeroBorderRevMan !== null && (
+            <span className="flex items-center gap-1.5"><span className="inline-block w-5 border-t-2 border-dashed border-[#f97316]" />親の控除ゼロ（所得123万）</span>
+          )}
+          {dependantBorderRevMan !== null && (
+            <span className="flex items-center gap-1.5"><span className="inline-block w-5 border-t-2 border-dashed border-[#ef4444]" />社保扶養上限（年収150万）</span>
+          )}
+        </div>
       </div>
     </div>
   );

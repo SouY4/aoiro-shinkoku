@@ -35,6 +35,11 @@ export async function performYearEndCarryover(fiscalYear: number): Promise<{
       jigyonushiKariBalance += line.creditAmount - line.debitAmount;
     } else if (line.account.code === "1090") {
       jigyonushiKashiBalance += line.debitAmount - line.creditAmount;
+    } else if (line.account.type === "expense" && line.account.category === "operating") {
+      // 家事按分の私的利用分を事業主貸に加算（貸借対照表と同じロジック）
+      const ratio = (line.allocationPercent ?? 100) / 100;
+      const debitBalance = line.debitAmount - line.creditAmount;
+      jigyonushiKashiBalance += debitBalance - Math.round(debitBalance * ratio);
     }
   }
 
@@ -109,6 +114,11 @@ export async function getCarryoverPreview(fiscalYear: number) {
       jigyonushiKariBalance += line.creditAmount - line.debitAmount;
     } else if (line.account.code === "1090") {
       jigyonushiKashiBalance += line.debitAmount - line.creditAmount;
+    } else if (line.account.type === "expense" && line.account.category === "operating") {
+      // 家事按分の私的利用分を事業主貸に加算（貸借対照表と同じロジック）
+      const ratio = (line.allocationPercent ?? 100) / 100;
+      const debitBalance = line.debitAmount - line.creditAmount;
+      jigyonushiKashiBalance += debitBalance - Math.round(debitBalance * ratio);
     }
   }
 

@@ -25,6 +25,7 @@ export default async function SimulatorPage() {
           initialSalaryRevenue={settings.salaryRevenue}
           initialBusinessRevenue={summary.totalRevenue}
           initialBusinessExpenses={summary.totalExpenses}
+          initialProportionalExpenses={summary.totalProportionalExpenses}
         />
       </div>
     </div>

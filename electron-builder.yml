@@ -1,5 +1,9 @@
 appId: com.aoiro-shinkoku.app
 productName: AoiroShinkoku
+publish:
+  provider: github
+  owner: SouY4
+  repo: AoiroShinkoku
 directories:
   output: dist
   buildResources: build
