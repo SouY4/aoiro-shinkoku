@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 
 type AuditLog = {
   id: number;
@@ -173,9 +173,8 @@ export default function AuditLogClient({
                 const meta = ACTION_LABEL[log.action];
                 const isExpanded = expanded === log.id;
                 return (
-                  <>
+                  <React.Fragment key={log.id}>
                     <tr
-                      key={log.id}
                       className="border-t border-gray-100 hover:bg-gray-50"
                     >
                       <td className="px-4 py-2.5 text-xs text-gray-600 whitespace-nowrap">
@@ -211,7 +210,6 @@ export default function AuditLogClient({
                     </tr>
                     {isExpanded && (
                       <tr
-                        key={`${log.id}-detail`}
                         className="bg-gray-50 border-t border-gray-100"
                       >
                         <td colSpan={6} className="px-4 py-3">
@@ -240,7 +238,7 @@ export default function AuditLogClient({
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 );
               })}
             </tbody>

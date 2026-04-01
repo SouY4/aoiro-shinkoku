@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { updateJournalEntry } from "@/actions/journal-actions";
 import { getAccounts } from "@/actions/account-actions";
-import { getClients } from "@/actions/client-actions";
+import { getClients, createClient } from "@/actions/client-actions";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
+import { X, Plus } from "lucide-react";
 
 interface Account {
   id: number;
@@ -85,6 +85,9 @@ export default function JournalEditModal({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [clientId, setClientId] = useState<number>(entry.clientId || 0);
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientLoading, setNewClientLoading] = useState(false);
   const [date, setDate] = useState(toDateStr(entry.date));
   const [description, setDescription] = useState(entry.description);
   const [rows, setRows] = useState<EditRow[]>(() => toEditRows(entry.lines));
@@ -144,6 +147,22 @@ export default function JournalEditModal({
 
     if (lines.length < 2) { setError("借方と貸方の両方に科目と金額を入力してください"); return; }
 
+    const handleCreateClient = async () => {
+      if (!newClientName.trim()) return;
+      setNewClientLoading(true);
+      try {
+        const created = await createClient({ name: newClientName.trim() });
+        setClients((prev) => [...prev, { id: created.id, name: created.name, honorific: created.honorific }].sort((a, b) => a.name.localeCompare(b.name)));
+        setClientId(created.id);
+        setShowNewClient(false);
+        setNewClientName("");
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "取引先の作成に失敗しました");
+      } finally {
+        setNewClientLoading(false);
+      }
+    };
+
     setSaving(true);
     try {
       await updateJournalEntry(entry.id, { date, description: description.trim(), clientId: clientId || null, lines });
@@ -188,9 +207,9 @@ export default function JournalEditModal({
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
-          {clients.length > 0 && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">取引先（任意）</label>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">取引先（任意）</label>
+            <div className="flex items-center gap-2">
               <select value={clientId} onChange={(e) => setClientId(parseInt(e.target.value))}
                 className="w-full max-w-xs border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value={0}>-- 選択しない --</option>
@@ -198,8 +217,27 @@ export default function JournalEditModal({
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+              <button type="button" onClick={() => { setShowNewClient(true); setNewClientName(""); }}
+                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap">
+                <Plus size={13} />新規
+              </button>
             </div>
-          )}
+            {showNewClient && (
+              <div className="mt-2 flex items-center gap-2 max-w-sm">
+                <input type="text" value={newClientName} onChange={(e) => setNewClientName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreateClient(); } }}
+                  placeholder="取引先名" autoFocus
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <button type="button" disabled={!newClientName.trim() || newClientLoading} onClick={handleCreateClient}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                  追加
+                </button>
+                <button type="button" onClick={() => setShowNewClient(false)} className="text-gray-400 hover:text-gray-600">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="border border-gray-200 rounded-lg overflow-hidden mb-4">
             <table className="w-full text-sm">

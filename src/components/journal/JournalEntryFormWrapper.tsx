@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, type ComponentType } from "re
 import { createJournalEntry } from "@/actions/journal-actions";
 import { uploadReceipt } from "@/actions/receipt-actions";
 import { getAccounts } from "@/actions/account-actions";
-import { getClients } from "@/actions/client-actions";
+import { getClients, createClient } from "@/actions/client-actions";
 import { getSubscriptionTemplates, saveSubscriptionTemplates } from "@/actions/settings-actions";
 import { useRouter } from "next/navigation";
 import {
@@ -481,6 +481,9 @@ export default function JournalEntryFormWrapper() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [clientId, setClientId] = useState<number>(0);
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientLoading, setNewClientLoading] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
   const [error, setError] = useState("");
@@ -633,6 +636,22 @@ export default function JournalEntryFormWrapper() {
       }
     }
     return lines;
+  };
+
+  const handleCreateClient = async () => {
+    if (!newClientName.trim()) return;
+    setNewClientLoading(true);
+    try {
+      const created = await createClient({ name: newClientName.trim() });
+      setClients((prev) => [...prev, { id: created.id, name: created.name, honorific: created.honorific }].sort((a, b) => a.name.localeCompare(b.name)));
+      setClientId(created.id);
+      setShowNewClient(false);
+      setNewClientName("");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "取引先の作成に失敗しました");
+    } finally {
+      setNewClientLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -904,9 +923,9 @@ export default function JournalEntryFormWrapper() {
         </div>
 
         {/* 取引先 */}
-        {clients.length > 0 && (
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">取引先（任意）</label>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">取引先（任意）</label>
+          <div className="flex items-center gap-2">
             <select
               value={clientId}
               onChange={(e) => setClientId(parseInt(e.target.value))}
@@ -917,8 +936,45 @@ export default function JournalEntryFormWrapper() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => { setShowNewClient(true); setNewClientName(""); }}
+              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
+            >
+              <Plus size={13} />
+              新規
+            </button>
           </div>
-        )}
+
+          {showNewClient && (
+            <div className="mt-2 flex items-center gap-2 max-w-sm">
+              <input
+                type="text"
+                value={newClientName}
+                onChange={(e) => setNewClientName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreateClient(); } }}
+                placeholder="取引先名"
+                autoFocus
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                type="button"
+                disabled={!newClientName.trim() || newClientLoading}
+                onClick={handleCreateClient}
+                className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                追加
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowNewClient(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* 仕訳テーブル（横並び形式） */}
         <div className="border border-gray-200 rounded-lg overflow-hidden mb-4">
