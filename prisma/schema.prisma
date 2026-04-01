@@ -33,11 +33,15 @@ model JournalEntry {
   paymentDate     DateTime?     // 入金日 or 支払日
   description     String
   isAdjusting     Boolean       @default(false)
+  clientId        Int?          // 取引先（任意）
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   lines           JournalLine[]
   receipts        Receipt[]
   depreciationRecords DepreciationRecord[]
+  client          Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
 }
 
 // 仕訳明細 (Journal Line)
@@ -155,6 +159,7 @@ model Client {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   documents     BusinessDocument[]
+  journalEntries JournalEntry[]
 }
 
 // 書類 (Business Document: 請求書・見積書・納品書)

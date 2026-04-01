@@ -57,6 +57,7 @@ export async function createJournalEntry(data: {
   transactionDate?: string | null;
   paymentDate?: string | null;
   isAdjusting?: boolean;
+  clientId?: number | null;
   lines: { accountId: number; debitAmount: number; creditAmount: number; description?: string; allocationPercent?: number }[];
 }) {
   // サーバー側バリデーション
@@ -72,6 +73,7 @@ export async function createJournalEntry(data: {
         paymentDate: data.paymentDate ? new Date(data.paymentDate) : null,
         description: data.description.trim(),
         isAdjusting: data.isAdjusting || false,
+        clientId: data.clientId || null,
         lines: {
           create: data.lines.map((line) => ({
             accountId: line.accountId,
@@ -82,7 +84,7 @@ export async function createJournalEntry(data: {
           })),
         },
       },
-      include: { lines: { include: { account: true } } },
+      include: { lines: { include: { account: true } }, client: true },
     });
     await writeAuditLog(tx, created.id, "create", null, { description: created.description, date: created.date, lines: data.lines });
     return created;
@@ -103,6 +105,7 @@ export async function updateJournalEntry(
     transactionDate?: string | null;
     paymentDate?: string | null;
     isAdjusting?: boolean;
+    clientId?: number | null;
     lines: { accountId: number; debitAmount: number; creditAmount: number; description?: string; allocationPercent?: number }[];
   }
 ) {
@@ -131,6 +134,7 @@ export async function updateJournalEntry(
         paymentDate: data.paymentDate ? new Date(data.paymentDate) : null,
         description: data.description.trim(),
         isAdjusting: data.isAdjusting || false,
+        clientId: data.clientId || null,
         lines: {
           create: data.lines.map((line) => ({
             accountId: line.accountId,
@@ -141,7 +145,7 @@ export async function updateJournalEntry(
           })),
         },
       },
-      include: { lines: { include: { account: true } } },
+      include: { lines: { include: { account: true } }, client: true },
     });
 
     await writeAuditLog(tx, id, "update",
@@ -161,7 +165,7 @@ export async function updateJournalEntry(
 export async function getJournalEntry(id: number) {
   return prisma.journalEntry.findUnique({
     where: { id },
-    include: { lines: { include: { account: true } }, receipts: true },
+    include: { lines: { include: { account: true } }, receipts: true, client: true },
   });
 }
 
@@ -170,7 +174,7 @@ export async function getJournalEntries(fiscalYear: number) {
   const endDate = new Date(fiscalYear + 1, 0, 1);
   return prisma.journalEntry.findMany({
     where: { date: { gte: startDate, lt: endDate } },
-    include: { lines: { include: { account: true } }, receipts: true },
+    include: { lines: { include: { account: true } }, receipts: true, client: true },
     orderBy: { date: "asc" },
   });
 }

@@ -23,6 +23,8 @@ type EntryData = {
   date: Date;
   description: string;
   isAdjusting: boolean;
+  clientId?: number | null;
+  client?: { id: number; name: string } | null;
   lines: LineData[];
   receipts: { id: number; originalName: string }[];
 };
@@ -201,6 +203,11 @@ export default function JournalList({ entries }: { entries: EntryData[] }) {
                       <span>
                         {entry.isAdjusting && <span className="text-amber-600 text-xs mr-1">[訂正]</span>}
                         {entry.description}
+                        {entry.client && (
+                          <span className="ml-2 text-xs bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded-full">
+                            {entry.client.name}
+                          </span>
+                        )}
                       </span>
                     ) : ""}
                   </td>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { updateJournalEntry } from "@/actions/journal-actions";
 import { getAccounts } from "@/actions/account-actions";
+import { getClients } from "@/actions/client-actions";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 
@@ -22,10 +23,17 @@ interface EditRow {
   allocationPercent: number;
 }
 
+interface Client {
+  id: number;
+  name: string;
+  honorific: string;
+}
+
 interface EntryData {
   id: number;
   date: Date;
   description: string;
+  clientId?: number | null;
   lines: {
     id: number;
     accountId: number;
@@ -75,6 +83,8 @@ export default function JournalEditModal({
 }) {
   const router = useRouter();
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [clientId, setClientId] = useState<number>(entry.clientId || 0);
   const [date, setDate] = useState(toDateStr(entry.date));
   const [description, setDescription] = useState(entry.description);
   const [rows, setRows] = useState<EditRow[]>(() => toEditRows(entry.lines));
@@ -83,6 +93,7 @@ export default function JournalEditModal({
 
   useEffect(() => {
     getAccounts().then(setAccounts);
+    getClients().then(setClients);
   }, []);
 
   const totalDebit = rows.reduce((s, r) => s + r.debitAmount, 0);
@@ -135,7 +146,7 @@ export default function JournalEditModal({
 
     setSaving(true);
     try {
-      await updateJournalEntry(entry.id, { date, description: description.trim(), lines });
+      await updateJournalEntry(entry.id, { date, description: description.trim(), clientId: clientId || null, lines });
       onClose();
       router.refresh();
     } catch (e: unknown) {
@@ -177,6 +188,18 @@ export default function JournalEditModal({
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
+          {clients.length > 0 && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">取引先（任意）</label>
+              <select value={clientId} onChange={(e) => setClientId(parseInt(e.target.value))}
+                className="w-full max-w-xs border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value={0}>-- 選択しない --</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="border border-gray-200 rounded-lg overflow-hidden mb-4">
             <table className="w-full text-sm">

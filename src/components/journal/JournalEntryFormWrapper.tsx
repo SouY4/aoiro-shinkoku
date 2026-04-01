@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, type ComponentType } from "re
 import { createJournalEntry } from "@/actions/journal-actions";
 import { uploadReceipt } from "@/actions/receipt-actions";
 import { getAccounts } from "@/actions/account-actions";
+import { getClients } from "@/actions/client-actions";
 import { getSubscriptionTemplates, saveSubscriptionTemplates } from "@/actions/settings-actions";
 import { useRouter } from "next/navigation";
 import {
@@ -48,6 +49,12 @@ interface Account {
   code: string;
   name: string;
   type: string;
+}
+
+interface Client {
+  id: number;
+  name: string;
+  honorific: string;
 }
 
 /** 1行 = 借方科目+金額 & 貸方科目+金額 の横並び */
@@ -472,6 +479,8 @@ function SubscriptionEditor({
 export default function JournalEntryFormWrapper() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [clientId, setClientId] = useState<number>(0);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
   const [error, setError] = useState("");
@@ -487,6 +496,7 @@ export default function JournalEntryFormWrapper() {
 
   useEffect(() => {
     getAccounts().then(setAccounts);
+    getClients().then(setClients);
     getSubscriptionTemplates().then((json) => setSubscriptions(parseAndMerge(json)));
   }, []);
 
@@ -673,6 +683,7 @@ export default function JournalEntryFormWrapper() {
       const entry = await createJournalEntry({
         date,
         description: mainDescription,
+        clientId: clientId || null,
         lines,
       });
 
@@ -687,6 +698,7 @@ export default function JournalEntryFormWrapper() {
       }
 
       setRows([emptyRow()]);
+      setClientId(0);
       setReceiptFiles([]);
       router.refresh();
     } catch (err) {
@@ -890,6 +902,23 @@ export default function JournalEntryFormWrapper() {
             required
           />
         </div>
+
+        {/* 取引先 */}
+        {clients.length > 0 && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">取引先（任意）</label>
+            <select
+              value={clientId}
+              onChange={(e) => setClientId(parseInt(e.target.value))}
+              className="w-full max-w-xs border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value={0}>-- 選択しない --</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* 仕訳テーブル（横並び形式） */}
         <div className="border border-gray-200 rounded-lg overflow-hidden mb-4">
