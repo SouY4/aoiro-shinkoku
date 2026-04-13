@@ -1,7 +1,9 @@
 import { getSettings, updateSettings } from "@/actions/settings-actions";
 import { createBackup, listBackups, getBackupDir } from "@/actions/backup-actions";
 import { performYearEndCarryover, getCarryoverPreview } from "@/actions/fiscal-year-actions";
+import { getAccounts } from "@/actions/account-actions";
 import SettingsForm from "@/components/settings/SettingsForm";
+import SubAccountManager from "@/components/settings/SubAccountManager";
 import { formatCurrency, toReiwa } from "@/lib/formatters";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +13,7 @@ export default async function SettingsPage() {
   const backups = await listBackups();
   const preview = await getCarryoverPreview(settings.fiscalYear);
   const backupDir = await getBackupDir();
+  const accounts = await getAccounts();
 
   async function handleBackup() {
     "use server";
@@ -29,6 +32,8 @@ export default async function SettingsPage() {
         <h1 className="text-2xl font-bold mb-6">設定</h1>
         <SettingsForm initialSettings={settings} />
       </div>
+
+      <SubAccountManager accounts={accounts} />
 
       {/* バックアップ */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">

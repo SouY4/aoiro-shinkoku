@@ -3,11 +3,18 @@
 import { useState, useEffect } from "react";
 import { formatCurrency, formatDateShort } from "@/lib/formatters";
 
+interface SubAccount {
+  id: number;
+  name: string;
+  sortOrder: number;
+}
+
 interface Account {
   id: number;
   code: string;
   name: string;
   type: string;
+  subAccounts?: SubAccount[];
 }
 
 interface LedgerEntry {
@@ -22,6 +29,7 @@ interface LedgerEntry {
 
 export default function LedgerClient({ accounts, fiscalYear }: { accounts: Account[]; fiscalYear: number }) {
   const [selectedAccountId, setSelectedAccountId] = useState<number>(0);
+  const [selectedSubAccountId, setSelectedSubAccountId] = useState<number>(0);
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -36,20 +44,22 @@ export default function LedgerClient({ accounts, fiscalYear }: { accounts: Accou
   useEffect(() => {
     if (!selectedAccountId) { setEntries([]); return; }
     setLoading(true);
-    fetch(`/api/ledger?accountId=${selectedAccountId}&fiscalYear=${fiscalYear}`)
+    const sub = selectedSubAccountId ? `&subAccountId=${selectedSubAccountId}` : "";
+    fetch(`/api/ledger?accountId=${selectedAccountId}&fiscalYear=${fiscalYear}${sub}`)
       .then((r) => r.json())
       .then((data) => setEntries(data))
       .catch(() => setEntries([]))
       .finally(() => setLoading(false));
-  }, [selectedAccountId, fiscalYear]);
+  }, [selectedAccountId, selectedSubAccountId, fiscalYear]);
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const subAccounts = selectedAccount?.subAccounts ?? [];
 
   return (
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="p-4 border-b border-gray-200">
         <label className="block text-sm font-medium text-gray-700 mb-2">勘定科目を選択</label>
-        <select value={selectedAccountId} onChange={(e) => setSelectedAccountId(parseInt(e.target.value))}
+        <select value={selectedAccountId} onChange={(e) => { setSelectedAccountId(parseInt(e.target.value)); setSelectedSubAccountId(0); }}
           className="w-full max-w-md border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value={0}>-- 勘定科目を選択 --</option>
           {Object.entries(grouped).map(([g, accs]) => (
@@ -58,6 +68,30 @@ export default function LedgerClient({ accounts, fiscalYear }: { accounts: Accou
             </optgroup>
           ))}
         </select>
+        {subAccounts.length > 0 && (
+          <div className="mt-3">
+            <label className="block text-xs font-medium text-gray-600 mb-1">補助科目（口座内訳）</label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedSubAccountId(0)}
+                className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${selectedSubAccountId === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
+              >
+                全体
+              </button>
+              {subAccounts.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSelectedSubAccountId(s.id)}
+                  className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${selectedSubAccountId === s.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {loading && <p className="p-6 text-gray-400 text-center">読み込み中...</p>}

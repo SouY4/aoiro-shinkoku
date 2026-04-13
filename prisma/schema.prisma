@@ -21,8 +21,27 @@ model Account {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   journalLines JournalLine[]
+  subAccounts  SubAccount[]
   fixedAssetsAsAsset   FixedAsset[] @relation("FixedAssetAsset")
   fixedAssetsAsExpense FixedAsset[] @relation("FixedAssetExpense")
+}
+
+// 補助科目 (Sub-account / auxiliary ledger)
+// 例: 「その他の預金」の下に「銀行口座」「Stripe残高」を作成し、
+// 決算書上は親科目1行、帳簿上は補助科目ごとに残高を把握する。
+model SubAccount {
+  id        Int          @id @default(autoincrement())
+  accountId Int
+  name      String
+  sortOrder Int          @default(0)
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  account   Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  journalLines JournalLine[]
+
+  @@unique([accountId, name])
+  @@index([accountId])
 }
 
 // 仕訳 (Journal Entry header)
@@ -49,15 +68,18 @@ model JournalLine {
   id               Int          @id @default(autoincrement())
   journalEntryId   Int
   accountId        Int
+  subAccountId     Int?
   debitAmount      Int          @default(0)
   creditAmount     Int          @default(0)
   description      String?
   allocationPercent Int         @default(100) // 家事按分: 事業割合 1–100（100=全額事業）
   journalEntry     JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
   account          Account      @relation(fields: [accountId], references: [id])
+  subAccount       SubAccount?  @relation(fields: [subAccountId], references: [id], onDelete: SetNull)
 
   @@index([journalEntryId])
   @@index([accountId])
+  @@index([subAccountId])
 }
 
 // 領収書 (Receipt)

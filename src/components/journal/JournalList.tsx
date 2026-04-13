@@ -11,7 +11,9 @@ import JournalEditModal from "@/components/journal/JournalEditModal";
 type LineData = {
   id: number;
   accountId: number;
+  subAccountId?: number | null;
   account: { id: number; name: string };
+  subAccount?: { id: number; name: string } | null;
   debitAmount: number;
   creditAmount: number;
   description: string | null;

@@ -25,6 +25,22 @@ async function main() {
     }
     console.log(`  勘定科目: ${DEFAULT_ACCOUNTS.length}件`);
 
+    // 「その他の預金」(1004) のデフォルト補助科目: 銀行口座 / Stripe残高
+    const otherDeposit = await prisma.account.findUnique({ where: { code: "1004" } });
+    if (otherDeposit) {
+      const defaultSubs = [
+        { name: "銀行口座", sortOrder: 1 },
+        { name: "Stripe残高", sortOrder: 2 },
+      ];
+      for (const s of defaultSubs) {
+        await prisma.subAccount.upsert({
+          where: { accountId_name: { accountId: otherDeposit.id, name: s.name } },
+          update: {},
+          create: { accountId: otherDeposit.id, name: s.name, sortOrder: s.sortOrder },
+        });
+      }
+    }
+
     // デフォルト設定
     const defaultSettings = [
       { key: "fiscalYear", value: String(new Date().getFullYear()) },

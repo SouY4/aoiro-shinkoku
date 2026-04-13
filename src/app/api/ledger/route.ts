@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const accountId = parseInt(searchParams.get("accountId") || "0");
+  const subAccountIdParam = searchParams.get("subAccountId");
+  const subAccountId = subAccountIdParam ? parseInt(subAccountIdParam) : null;
   const fiscalYear = parseInt(searchParams.get("fiscalYear") || String(new Date().getFullYear()));
 
   if (!accountId) return NextResponse.json([]);
@@ -16,12 +18,15 @@ export async function GET(request: NextRequest) {
 
   const isDebitNormal = account.type === "asset" || account.type === "expense";
 
+  const subFilter = subAccountId ? { subAccountId } : {};
+
   // 前期繰越残高を計算（資産・負債・資本のストック勘定のみ）
   let carryForwardBalance = 0;
   if (account.type === "asset" || account.type === "liability" || account.type === "capital") {
     const priorLines = await prisma.journalLine.findMany({
       where: {
         accountId,
+        ...subFilter,
         journalEntry: { date: { lt: startDate } },
       },
     });
@@ -38,6 +43,7 @@ export async function GET(request: NextRequest) {
   const lines = await prisma.journalLine.findMany({
     where: {
       accountId,
+      ...subFilter,
       journalEntry: { date: { gte: startDate, lt: endDate } },
     },
     include: {

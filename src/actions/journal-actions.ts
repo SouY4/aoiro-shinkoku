@@ -58,7 +58,7 @@ export async function createJournalEntry(data: {
   paymentDate?: string | null;
   isAdjusting?: boolean;
   clientId?: number | null;
-  lines: { accountId: number; debitAmount: number; creditAmount: number; description?: string; allocationPercent?: number }[];
+  lines: { accountId: number; subAccountId?: number | null; debitAmount: number; creditAmount: number; description?: string; allocationPercent?: number }[];
 }) {
   // サーバー側バリデーション
   if (!data.date) throw new Error("日付を入力してください");
@@ -77,6 +77,7 @@ export async function createJournalEntry(data: {
         lines: {
           create: data.lines.map((line) => ({
             accountId: line.accountId,
+            subAccountId: line.subAccountId || null,
             debitAmount: line.debitAmount,
             creditAmount: line.creditAmount,
             description: line.description || null,
@@ -84,7 +85,7 @@ export async function createJournalEntry(data: {
           })),
         },
       },
-      include: { lines: { include: { account: true } }, client: true },
+      include: { lines: { include: { account: true, subAccount: true } }, client: true },
     });
     await writeAuditLog(tx, created.id, "create", null, { description: created.description, date: created.date, lines: data.lines });
     return created;
@@ -106,7 +107,7 @@ export async function updateJournalEntry(
     paymentDate?: string | null;
     isAdjusting?: boolean;
     clientId?: number | null;
-    lines: { accountId: number; debitAmount: number; creditAmount: number; description?: string; allocationPercent?: number }[];
+    lines: { accountId: number; subAccountId?: number | null; debitAmount: number; creditAmount: number; description?: string; allocationPercent?: number }[];
   }
 ) {
   // サーバー側バリデーション
@@ -138,6 +139,7 @@ export async function updateJournalEntry(
         lines: {
           create: data.lines.map((line) => ({
             accountId: line.accountId,
+            subAccountId: line.subAccountId || null,
             debitAmount: line.debitAmount,
             creditAmount: line.creditAmount,
             description: line.description || null,
@@ -145,7 +147,7 @@ export async function updateJournalEntry(
           })),
         },
       },
-      include: { lines: { include: { account: true } }, client: true },
+      include: { lines: { include: { account: true, subAccount: true } }, client: true },
     });
 
     await writeAuditLog(tx, id, "update",
@@ -165,7 +167,7 @@ export async function updateJournalEntry(
 export async function getJournalEntry(id: number) {
   return prisma.journalEntry.findUnique({
     where: { id },
-    include: { lines: { include: { account: true } }, receipts: true, client: true },
+    include: { lines: { include: { account: true, subAccount: true } }, receipts: true, client: true },
   });
 }
 
@@ -174,7 +176,7 @@ export async function getJournalEntries(fiscalYear: number) {
   const endDate = new Date(fiscalYear + 1, 0, 1);
   return prisma.journalEntry.findMany({
     where: { date: { gte: startDate, lt: endDate } },
-    include: { lines: { include: { account: true } }, receipts: true, client: true },
+    include: { lines: { include: { account: true, subAccount: true } }, receipts: true, client: true },
     orderBy: { date: "asc" },
   });
 }
@@ -223,6 +225,7 @@ export async function createReversalEntry(originalId: number) {
       lines: {
         create: original.lines.map((line) => ({
           accountId: line.accountId,
+          subAccountId: line.subAccountId,
           // 借方と貸方を逆にする
           debitAmount: line.creditAmount,
           creditAmount: line.debitAmount,

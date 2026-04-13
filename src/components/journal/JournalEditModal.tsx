@@ -7,17 +7,26 @@ import { getClients, createClient } from "@/actions/client-actions";
 import { useRouter } from "next/navigation";
 import { X, Plus } from "lucide-react";
 
+interface SubAccount {
+  id: number;
+  name: string;
+  sortOrder: number;
+}
+
 interface Account {
   id: number;
   code: string;
   name: string;
   type: string;
+  subAccounts?: SubAccount[];
 }
 
 interface EditRow {
   debitAccountId: number;
+  debitSubAccountId: number;
   debitAmount: number;
   creditAccountId: number;
+  creditSubAccountId: number;
   creditAmount: number;
   description: string;
   allocationPercent: number;
@@ -37,6 +46,7 @@ interface EntryData {
   lines: {
     id: number;
     accountId: number;
+    subAccountId?: number | null;
     debitAmount: number;
     creditAmount: number;
     description: string | null;
@@ -64,8 +74,10 @@ function toEditRows(lines: EntryData["lines"]): EditRow[] {
     const c = credits[i];
     rows.push({
       debitAccountId: d?.accountId || 0,
+      debitSubAccountId: d?.subAccountId || 0,
       debitAmount: d?.debitAmount || 0,
       creditAccountId: c?.accountId || 0,
+      creditSubAccountId: c?.subAccountId || 0,
       creditAmount: c?.creditAmount || 0,
       description: d?.description || c?.description || "",
       allocationPercent: d?.allocationPercent ?? c?.allocationPercent ?? 100,
@@ -104,11 +116,23 @@ export default function JournalEditModal({
   const isBalanced = totalDebit === totalCredit && totalDebit > 0;
 
   const updateRow = (idx: number, updates: Partial<EditRow>) => {
-    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...updates } : r)));
+    setRows((prev) =>
+      prev.map((r, i) => {
+        if (i !== idx) return r;
+        const next = { ...r, ...updates };
+        if (updates.debitAccountId !== undefined && updates.debitAccountId !== r.debitAccountId) {
+          next.debitSubAccountId = 0;
+        }
+        if (updates.creditAccountId !== undefined && updates.creditAccountId !== r.creditAccountId) {
+          next.creditSubAccountId = 0;
+        }
+        return next;
+      })
+    );
   };
 
   const addRow = () => {
-    setRows([...rows, { debitAccountId: 0, debitAmount: 0, creditAccountId: 0, creditAmount: 0, description: "", allocationPercent: 100 }]);
+    setRows([...rows, { debitAccountId: 0, debitSubAccountId: 0, debitAmount: 0, creditAccountId: 0, creditSubAccountId: 0, creditAmount: 0, description: "", allocationPercent: 100 }]);
   };
 
   const removeRow = (idx: number) => {
@@ -138,12 +162,26 @@ export default function JournalEditModal({
     if (!description.trim()) { setError("摘要を入力してください"); return; }
     if (!isBalanced) { setError("借方合計と貸方合計が一致しません"); return; }
 
+    // 補助科目バリデーション
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const debitAcc = accounts.find((a) => a.id === r.debitAccountId);
+      if (debitAcc && (debitAcc.subAccounts?.length ?? 0) > 0 && r.debitAmount > 0 && !r.debitSubAccountId) {
+        setError(`行${i + 1}: 借方「${debitAcc.name}」の補助科目を選択してください`); return;
+      }
+      const creditAcc = accounts.find((a) => a.id === r.creditAccountId);
+      if (creditAcc && (creditAcc.subAccounts?.length ?? 0) > 0 && r.creditAmount > 0 && !r.creditSubAccountId) {
+        setError(`行${i + 1}: 貸方「${creditAcc.name}」の補助科目を選択してください`); return;
+      }
+    }
+
     // 行をサーバー形式に変換
-    const lines: { accountId: number; debitAmount: number; creditAmount: number; description?: string; allocationPercent: number }[] = [];
+    const lines: { accountId: number; subAccountId?: number | null; debitAmount: number; creditAmount: number; description?: string; allocationPercent: number }[] = [];
     for (const row of rows) {
       if (row.debitAccountId > 0 && row.debitAmount > 0) {
         lines.push({
           accountId: row.debitAccountId,
+          subAccountId: row.debitSubAccountId || null,
           debitAmount: row.debitAmount,
           creditAmount: 0,
           description: row.description || undefined,
@@ -153,6 +191,7 @@ export default function JournalEditModal({
       if (row.creditAccountId > 0 && row.creditAmount > 0) {
         lines.push({
           accountId: row.creditAccountId,
+          subAccountId: row.creditSubAccountId || null,
           debitAmount: 0,
           creditAmount: row.creditAmount,
           description: row.description || undefined,
@@ -264,6 +303,18 @@ export default function JournalEditModal({
                           </optgroup>
                         ))}
                       </select>
+                      {(() => {
+                        const sel = accounts.find((a) => a.id === row.debitAccountId);
+                        const subs = sel?.subAccounts ?? [];
+                        if (subs.length === 0) return null;
+                        return (
+                          <select value={row.debitSubAccountId} onChange={(e) => updateRow(idx, { debitSubAccountId: parseInt(e.target.value) })}
+                            className={`mt-1 w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${row.debitSubAccountId ? "border-gray-300" : "border-amber-300 bg-amber-50 text-amber-700"}`}>
+                            <option value={0}>-- 補助科目 --</option>
+                            {subs.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        );
+                      })()}
                     </td>
                     <td className="px-2 py-2">
                       <input type="number" min={0} value={row.debitAmount || ""}
@@ -283,6 +334,18 @@ export default function JournalEditModal({
                           </optgroup>
                         ))}
                       </select>
+                      {(() => {
+                        const sel = accounts.find((a) => a.id === row.creditAccountId);
+                        const subs = sel?.subAccounts ?? [];
+                        if (subs.length === 0) return null;
+                        return (
+                          <select value={row.creditSubAccountId} onChange={(e) => updateRow(idx, { creditSubAccountId: parseInt(e.target.value) })}
+                            className={`mt-1 w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${row.creditSubAccountId ? "border-gray-300" : "border-amber-300 bg-amber-50 text-amber-700"}`}>
+                            <option value={0}>-- 補助科目 --</option>
+                            {subs.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        );
+                      })()}
                     </td>
                     <td className="px-2 py-2">
                       <input type="number" min={0} value={row.creditAmount || ""}

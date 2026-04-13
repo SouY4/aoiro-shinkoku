@@ -44,11 +44,18 @@ import {
   type LucideProps,
 } from "lucide-react";
 
+interface SubAccount {
+  id: number;
+  name: string;
+  sortOrder: number;
+}
+
 interface Account {
   id: number;
   code: string;
   name: string;
   type: string;
+  subAccounts?: SubAccount[];
 }
 
 interface Client {
@@ -60,8 +67,10 @@ interface Client {
 /** 1行 = 借方科目+金額 & 貸方科目+金額 の横並び */
 interface Row {
   debitAccountId: number;
+  debitSubAccountId: number;
   debitAmount: number;
   creditAccountId: number;
+  creditSubAccountId: number;
   creditAmount: number;
   description: string;
   allocationPercent: number;
@@ -69,8 +78,10 @@ interface Row {
 
 const emptyRow = (): Row => ({
   debitAccountId: 0,
+  debitSubAccountId: 0,
   debitAmount: 0,
   creditAccountId: 0,
+  creditSubAccountId: 0,
   creditAmount: 0,
   description: "",
   allocationPercent: 100,
@@ -516,7 +527,20 @@ export default function JournalEntryFormWrapper() {
   };
 
   const updateRow = (idx: number, updates: Partial<Row>) => {
-    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...updates } : r)));
+    setRows((prev) =>
+      prev.map((r, i) => {
+        if (i !== idx) return r;
+        const next = { ...r, ...updates };
+        // 科目が変わったら補助科目はリセット
+        if (updates.debitAccountId !== undefined && updates.debitAccountId !== r.debitAccountId) {
+          next.debitSubAccountId = 0;
+        }
+        if (updates.creditAccountId !== undefined && updates.creditAccountId !== r.creditAccountId) {
+          next.creditSubAccountId = 0;
+        }
+        return next;
+      })
+    );
   };
 
   const applyTemplate = (t: (typeof TEMPLATES)[0]) => {
@@ -525,8 +549,10 @@ export default function JournalEntryFormWrapper() {
     setRows([
       {
         debitAccountId: debit?.id || 0,
+        debitSubAccountId: 0,
         debitAmount: 0,
         creditAccountId: credit?.id || 0,
+        creditSubAccountId: 0,
         creditAmount: 0,
         description: t.desc,
         allocationPercent: 100,
@@ -548,16 +574,20 @@ export default function JournalEntryFormWrapper() {
     setRows([
       {
         debitAccountId: bankAccount?.id || 0,
+        debitSubAccountId: 0,
         debitAmount: deposit,
         creditAccountId: receivableAccount?.id || 0,
+        creditSubAccountId: 0,
         creditAmount: reward,
         description: "売掛金回収（源泉徴収後）",
         allocationPercent: 100,
       },
       {
         debitAccountId: ownerDrawAccount?.id || 0,
+        debitSubAccountId: 0,
         debitAmount: withholding,
         creditAccountId: 0,
+        creditSubAccountId: 0,
         creditAmount: 0,
         description: `源泉徴収額（${rate}%）`,
         allocationPercent: 100,
@@ -578,8 +608,10 @@ export default function JournalEntryFormWrapper() {
       const credit = accounts.find((a) => a.code === line.creditCode);
       return {
         debitAccountId: debit?.id || 0,
+        debitSubAccountId: 0,
         debitAmount: line.amount,
         creditAccountId: credit?.id || 0,
+        creditSubAccountId: 0,
         creditAmount: line.amount,
         description: line.desc,
         allocationPercent: line.percent,
@@ -609,6 +641,7 @@ export default function JournalEntryFormWrapper() {
   const toServerLines = () => {
     const lines: {
       accountId: number;
+      subAccountId?: number | null;
       debitAmount: number;
       creditAmount: number;
       description?: string;
@@ -619,6 +652,7 @@ export default function JournalEntryFormWrapper() {
       if (row.debitAccountId > 0 && row.debitAmount > 0) {
         lines.push({
           accountId: row.debitAccountId,
+          subAccountId: row.debitSubAccountId || null,
           debitAmount: row.debitAmount,
           creditAmount: 0,
           description: row.description || undefined,
@@ -628,6 +662,7 @@ export default function JournalEntryFormWrapper() {
       if (row.creditAccountId > 0 && row.creditAmount > 0) {
         lines.push({
           accountId: row.creditAccountId,
+          subAccountId: row.creditSubAccountId || null,
           debitAmount: 0,
           creditAmount: row.creditAmount,
           description: row.description || undefined,
@@ -674,6 +709,16 @@ export default function JournalEntryFormWrapper() {
       }
       if (r.creditAccountId > 0 && r.creditAmount <= 0) {
         setError(`行${i + 1}: 貸方金額を入力してください`);
+        return;
+      }
+      const debitAcc = accounts.find((a) => a.id === r.debitAccountId);
+      if (debitAcc && (debitAcc.subAccounts?.length ?? 0) > 0 && !r.debitSubAccountId) {
+        setError(`行${i + 1}: 借方「${debitAcc.name}」の補助科目を選択してください`);
+        return;
+      }
+      const creditAcc = accounts.find((a) => a.id === r.creditAccountId);
+      if (creditAcc && (creditAcc.subAccounts?.length ?? 0) > 0 && !r.creditSubAccountId) {
+        setError(`行${i + 1}: 貸方「${creditAcc.name}」の補助科目を選択してください`);
         return;
       }
       if (!r.description.trim()) {
@@ -746,28 +791,51 @@ export default function JournalEntryFormWrapper() {
     value,
     onChange,
     placeholder,
+    subValue,
+    onSubChange,
   }: {
     value: number;
     onChange: (v: number) => void;
     placeholder: string;
-  }) => (
-    <select
-      value={value}
-      onChange={(e) => onChange(parseInt(e.target.value))}
-      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-    >
-      <option value={0}>{placeholder}</option>
-      {Object.entries(grouped).map(([g, accs]) => (
-        <optgroup key={g} label={g}>
-          {accs.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
+    subValue: number;
+    onSubChange: (v: number) => void;
+  }) => {
+    const selected = accounts.find((a) => a.id === value);
+    const subs = selected?.subAccounts ?? [];
+    return (
+      <div className="flex flex-col gap-1">
+        <select
+          value={value}
+          onChange={(e) => onChange(parseInt(e.target.value))}
+          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value={0}>{placeholder}</option>
+          {Object.entries(grouped).map(([g, accs]) => (
+            <optgroup key={g} label={g}>
+              {accs.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </optgroup>
           ))}
-        </optgroup>
-      ))}
-    </select>
-  );
+        </select>
+        {subs.length > 0 && (
+          <select
+            value={subValue}
+            onChange={(e) => onSubChange(parseInt(e.target.value))}
+            className={`w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${subValue ? "border-gray-300 text-gray-700" : "border-amber-300 text-amber-700 bg-amber-50"}`}
+            title="補助科目（口座の内訳）"
+          >
+            <option value={0}>-- 補助科目を選択 --</option>
+            {subs.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -998,6 +1066,8 @@ export default function JournalEntryFormWrapper() {
                       value={row.debitAccountId}
                       onChange={(v) => updateRow(idx, { debitAccountId: v })}
                       placeholder="-- 借方 --"
+                      subValue={row.debitSubAccountId}
+                      onSubChange={(v) => updateRow(idx, { debitSubAccountId: v })}
                     />
                   </td>
                   <td className="px-2 py-2">
@@ -1019,6 +1089,8 @@ export default function JournalEntryFormWrapper() {
                       value={row.creditAccountId}
                       onChange={(v) => updateRow(idx, { creditAccountId: v })}
                       placeholder="-- 貸方 --"
+                      subValue={row.creditSubAccountId}
+                      onSubChange={(v) => updateRow(idx, { creditSubAccountId: v })}
                     />
                   </td>
                   <td className="px-2 py-2">
