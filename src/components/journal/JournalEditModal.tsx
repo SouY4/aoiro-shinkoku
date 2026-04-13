@@ -116,6 +116,22 @@ export default function JournalEditModal({
     setRows(rows.filter((_, i) => i !== idx));
   };
 
+  const handleCreateClient = async () => {
+    if (!newClientName.trim()) return;
+    setNewClientLoading(true);
+    try {
+      const created = await createClient({ name: newClientName.trim() });
+      setClients((prev) => [...prev, { id: created.id, name: created.name, honorific: created.honorific }].sort((a, b) => a.name.localeCompare(b.name)));
+      setClientId(created.id);
+      setShowNewClient(false);
+      setNewClientName("");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "取引先の作成に失敗しました");
+    } finally {
+      setNewClientLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     setError("");
     if (!date) { setError("日付を入力してください"); return; }
@@ -146,22 +162,6 @@ export default function JournalEditModal({
     }
 
     if (lines.length < 2) { setError("借方と貸方の両方に科目と金額を入力してください"); return; }
-
-    const handleCreateClient = async () => {
-      if (!newClientName.trim()) return;
-      setNewClientLoading(true);
-      try {
-        const created = await createClient({ name: newClientName.trim() });
-        setClients((prev) => [...prev, { id: created.id, name: created.name, honorific: created.honorific }].sort((a, b) => a.name.localeCompare(b.name)));
-        setClientId(created.id);
-        setShowNewClient(false);
-        setNewClientName("");
-      } catch (e) {
-        alert(e instanceof Error ? e.message : "取引先の作成に失敗しました");
-      } finally {
-        setNewClientLoading(false);
-      }
-    };
 
     setSaving(true);
     try {
