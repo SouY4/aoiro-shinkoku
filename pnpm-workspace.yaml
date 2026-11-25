@@ -6,3 +6,17 @@ allowScriptsForPackages: prisma,@prisma/engines,better-sqlite3,@prisma/client
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+# pnpm 11 から package.json の "pnpm" フィールドは読まれない。
+# 元は package.json 側にあった onlyBuiltDependencies をここへ移設（2026-08-07）。
+onlyBuiltDependencies:
+  - prisma
+  - "@prisma/client"
+  - "@prisma/engines"
+  - better-sqlite3
+  - electron
+
+# ── サプライチェーン対策（pnpm 11 では既定値だが明示しておく）──
+minimumReleaseAge: 1440
+blockExoticSubdeps: true
+

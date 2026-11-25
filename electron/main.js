@@ -88,7 +88,8 @@ function startNextServer(port) {
       // 開発時: システムの node を使って next dev を起動
       const nodeCmd = process.platform === 'win32' ? 'node.exe' : 'node';
       const nextBin = path.join(appPath, 'node_modules', 'next', 'dist', 'bin', 'next');
-      nextProcess = spawn(nodeCmd, [nextBin, 'dev', '--port', String(port), '--hostname', '127.0.0.1'], {
+      // Turbopack で履歴画面が再読み込みを繰り返すため、開発時も Webpack を使用する。
+      nextProcess = spawn(nodeCmd, [nextBin, 'dev', '--webpack', '--port', String(port), '--hostname', '127.0.0.1'], {
         cwd: appPath, env, stdio: ['ignore', 'pipe', 'pipe'],
       });
       let stderrLog = '';

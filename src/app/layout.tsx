@@ -13,6 +13,7 @@ import {
   Settings,
   Receipt,
   HelpCircle,
+  Upload,
 } from "lucide-react";
 
 const geistSans = Geist({
@@ -29,11 +30,13 @@ const navItems = [
   { href: "/", label: "ダッシュボード", icon: LayoutDashboard },
   { href: "/guide", label: "使い方", icon: HelpCircle },
   { href: "/journal", label: "仕訳帳", icon: BookOpen },
+  { href: "/journal/import-stripe", label: "Stripe取込", icon: Upload },
   { href: "/ledger", label: "総勘定元帳", icon: FileText },
   { href: "/reports/income-statement", label: "損益計算書", icon: FileText },
   { href: "/reports/balance-sheet", label: "貸借対照表", icon: FileText },
   { href: "/reports/fixed-assets", label: "固定資産台帳", icon: FileText },
   { href: "/reports/inventory", label: "棚卸表", icon: FileText },
+  { href: "/reports/tax-return", label: "申告転記シート", icon: FileText },
   { href: "/reports/audit-log", label: "仕訳変更履歴", icon: FileText },
   { href: "/documents", label: "書類管理", icon: FileOutput },
   { href: "/clients", label: "取引先管理", icon: Users },

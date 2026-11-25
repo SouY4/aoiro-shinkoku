@@ -11,9 +11,17 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import Database from "better-sqlite3";
 import { z } from "zod";
 import path from "path";
+import { fileURLToPath } from "url";
 
 // ── DB接続 ────────────────────────────────────────────────────────────────
-const DB_PATH = path.join(process.cwd(), "prisma", "data", "database.sqlite");
+// process.cwd() を基準にすると、MCPクライアントがどこから起動したかで別のDBを
+// 掴んでしまう(実際 prisma/data/ の3月時点の古いコピーを参照していた)。
+// このファイルの位置からリポジトリルートを求め、アプリ本体(src/lib/prisma.ts)と
+// 同じ data/database.sqlite を見る。
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const DB_PATH = process.env.DATABASE_URL
+  ? path.resolve(PROJECT_ROOT, process.env.DATABASE_URL.replace(/^file:/, ""))
+  : path.join(PROJECT_ROOT, "data", "database.sqlite");
 import fs from "fs";
 if (!fs.existsSync(DB_PATH)) {
   process.stderr.write(
@@ -37,11 +45,13 @@ const SUGGESTION_RULES: { patterns: string[]; debitCode: string; creditCode: str
   { patterns: ["書籍", "本", "技術書", "書店", "amazon"],
     debitCode: "6010", creditCode: "3001", label: "消耗品費（書籍）" },
   { patterns: ["電車", "新幹線", "バス", "タクシー", "ic", "suica", "pasmo"],
-    debitCode: "6007", creditCode: "3001", label: "旅費交通費" },
+    debitCode: "6004", creditCode: "3001", label: "旅費交通費" },
+  // 「車両費」という科目は存在しないため旅費交通費に寄せる
   { patterns: ["ガソリン", "駐車"],
-    debitCode: "6006", creditCode: "3001", label: "車両費" },
+    debitCode: "6004", creditCode: "3001", label: "旅費交通費（車両）" },
+  // 「会議費」という科目は存在しないため接待交際費に寄せる
   { patterns: ["会議", "打ち合わせ", "ミーティング", "カフェ", "コーヒー"],
-    debitCode: "6008", creditCode: "3001", label: "会議費" },
+    debitCode: "6007", creditCode: "3001", label: "接待交際費（会議）" },
   { patterns: ["電気", "ガス", "水道"],
     debitCode: "6003", creditCode: "3001", label: "水道光熱費（按分要確認）" },
   { patterns: ["携帯", "スマホ", "docomo", "au", "softbank", "rakuten mobile"],
@@ -50,8 +60,9 @@ const SUGGESTION_RULES: { patterns: string[]; debitCode: string; creditCode: str
     debitCode: "6005", creditCode: "3001", label: "通信費（ネット）" },
   { patterns: ["文具", "コンビニ", "100均", "ダイソー", "usb", "hdmi", "ケーブル"],
     debitCode: "6010", creditCode: "3001", label: "消耗品費" },
+  // 「研修費」という科目は存在しないため雑費に寄せる
   { patterns: ["セミナー", "勉強会", "研修", "講座", "udemy", "connpass"],
-    debitCode: "6009", creditCode: "3001", label: "研修費" },
+    debitCode: "6018", creditCode: "3001", label: "雑費（研修）" },
   { patterns: ["入金", "振込", "売上"],
     debitCode: "1004", creditCode: "4001", label: "売上入金（預金）" },
 ];
@@ -76,6 +87,113 @@ function currentFiscalYear(): number {
   const row = db.prepare('SELECT value FROM "Setting" WHERE key = ?').get("fiscalYear") as
     | { value: string } | undefined;
   return parseInt(row?.value ?? String(new Date().getFullYear()));
+}
+
+function getSubAccount(accountId: number, name: string) {
+  return db.prepare('SELECT * FROM "SubAccount" WHERE accountId = ? AND name = ?')
+    .get(accountId, name) as { id: number; name: string } | undefined;
+}
+
+// 仕訳明細の入力型。create と update で共有する。
+type LineInput = {
+  accountCode: string;
+  subAccountName?: string;
+  debitAmount: number;
+  creditAmount: number;
+  description?: string;
+  allocationPercent?: number;
+};
+
+type ResolvedLine = {
+  accountId: number; accountName: string;
+  subAccountId: number | null; subAccountName: string | null;
+  debitAmount: number; creditAmount: number;
+  description: string | null; allocationPercent: number;
+};
+
+/** 科目コード・補助科目名をIDに解決する。見つからなければ throw。 */
+function resolveLines(lines: LineInput[]): ResolvedLine[] {
+  return lines.map((l) => {
+    const account = getAccountByCode(l.accountCode);
+    if (!account) {
+      throw new Error(`科目コード "${l.accountCode}" が見つかりません。list_accounts で確認してください。`);
+    }
+    let subAccountId: number | null = null;
+    let subAccountName: string | null = null;
+    if (l.subAccountName) {
+      const sub = getSubAccount(account.id, l.subAccountName);
+      if (!sub) {
+        throw new Error(
+          `科目 ${account.code} ${account.name} に補助科目 "${l.subAccountName}" がありません。`
+        );
+      }
+      subAccountId = sub.id;
+      subAccountName = sub.name;
+    }
+    return {
+      accountId: account.id, accountName: account.name,
+      subAccountId, subAccountName,
+      debitAmount: l.debitAmount ?? 0, creditAmount: l.creditAmount ?? 0,
+      description: l.description ?? null,
+      allocationPercent: l.allocationPercent ?? 100,
+    };
+  });
+}
+
+/** 貸借一致を検証する。問題があればメッセージ、なければ null。 */
+function validateBalance(lines: { debitAmount: number; creditAmount: number }[]): string | null {
+  const d = lines.reduce((s, l) => s + (l.debitAmount ?? 0), 0);
+  const c = lines.reduce((s, l) => s + (l.creditAmount ?? 0), 0);
+  if (d !== c) {
+    return `借方合計(¥${d.toLocaleString()}) ≠ 貸方合計(¥${c.toLocaleString()})`;
+  }
+  if (d === 0) return "金額がすべて0です。";
+  return null;
+}
+
+/** 監査ログ用のスナップショット。訂正前後の状態を残すために使う。 */
+function snapshotEntry(entryId: number) {
+  const e = db.prepare(
+    'SELECT date, description, isAdjusting FROM "JournalEntry" WHERE id = ?'
+  ).get(entryId) as { date: string; description: string; isAdjusting: number } | undefined;
+  if (!e) return null;
+  const lines = db.prepare(
+    `SELECT accountId, subAccountId, debitAmount, creditAmount, description, allocationPercent
+     FROM "JournalLine" WHERE journalEntryId = ? ORDER BY id`
+  ).all(entryId);
+  return { description: e.description, date: e.date, isAdjusting: !!e.isAdjusting, lines };
+}
+
+/** 明細を人が読める形に整形する。 */
+function formatLines(lines: ResolvedLine[]): string {
+  return lines.map((l) => {
+    const name = l.subAccountName ? `${l.accountName}[${l.subAccountName}]` : l.accountName;
+    const alloc = l.allocationPercent !== 100 ? `（事業割合${l.allocationPercent}%）` : "";
+    return l.debitAmount > 0
+      ? `  借: ${name} ¥${l.debitAmount.toLocaleString()}${alloc}`
+      : `  貸: ${name} ¥${l.creditAmount.toLocaleString()}${alloc}`;
+  }).join("\n");
+}
+
+// 証憑ファイルの置き場。アプリ側と同じ data/receipts を使う。
+const RECEIPT_DIR = path.join(PROJECT_ROOT, "data", "receipts");
+const MIME_BY_EXT: Record<string, string> = {
+  ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
+  ".heic": "image/heic", ".heif": "image/heif",
+};
+
+// ── 起動時チェック ────────────────────────────────────────────────────────
+// SUGGESTION_RULES のコードが Account テーブルに実在するか検証する。
+// 実在しないコードを提案すると、誤った科目のまま記帳されて帳簿が壊れるため。
+for (const rule of SUGGESTION_RULES) {
+  for (const code of [rule.debitCode, rule.creditCode]) {
+    if (!getAccountByCode(code)) {
+      process.stderr.write(
+        `[aoiro-mcp] 警告: ルール「${rule.label}」の科目コード ${code} が存在しません\n`
+      );
+    }
+  }
 }
 
 // ── MCPサーバー定義 ───────────────────────────────────────────────────────
@@ -337,8 +455,10 @@ server.tool(
     description: z.string().describe("摘要（例: 'GitHub Pro 月額'）"),
     lines: z.array(z.object({
       accountCode:       z.string().describe("勘定科目コード（例: '6005'）"),
+      subAccountName:    z.string().optional().describe("補助科目名（例: 'Stripe残高' / '銀行口座'）。1004など補助科目のある科目で使う"),
       debitAmount:       z.number().describe("借方金額（貸方のときは0）"),
       creditAmount:      z.number().describe("貸方金額（借方のときは0）"),
+      description:       z.string().optional().describe("明細ごとの摘要（省略可）"),
       allocationPercent: z.number().optional().describe("事業割合 0-100（省略時100）"),
     })).describe("仕訳明細。借方は debitAmount > 0、貸方は creditAmount > 0 にする"),
     isAdjusting: z.boolean().optional().describe("決算整理仕訳か（省略時false）"),
@@ -355,60 +475,226 @@ server.tool(
       return { content: [{ type: "text", text: "エラー: 最低2行の明細が必要です。" }], isError: true };
     }
 
-    const totalDebit  = lines.reduce((s: number, l: { debitAmount: number }) => s + (l.debitAmount ?? 0), 0);
-    const totalCredit = lines.reduce((s: number, l: { creditAmount: number }) => s + (l.creditAmount ?? 0), 0);
-    if (totalDebit !== totalCredit) {
+    const imbalance = validateBalance(lines);
+    if (imbalance) {
+      return { content: [{ type: "text", text: `エラー: ${imbalance}` }], isError: true };
+    }
+
+    try {
+      const resolvedLines = resolveLines(lines as LineInput[]);
+
+      const insert = db.transaction(() => {
+        const entryResult = db.prepare(
+          `INSERT INTO "JournalEntry" (date, description, isAdjusting, createdAt, updatedAt)
+           VALUES (?, ?, ?, datetime('now'), datetime('now'))`
+        ).run(new Date(date).toISOString(), description.trim(), isAdjusting ? 1 : 0);
+
+        const entryId = entryResult.lastInsertRowid as number;
+
+        for (const l of resolvedLines) {
+          db.prepare(
+            `INSERT INTO "JournalLine"
+               (journalEntryId, accountId, subAccountId, debitAmount, creditAmount, description, allocationPercent)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+          ).run(entryId, l.accountId, l.subAccountId, l.debitAmount, l.creditAmount, l.description, l.allocationPercent);
+        }
+
+        db.prepare(
+          `INSERT INTO "JournalAuditLog" (journalEntryId, action, afterData, changedAt)
+           VALUES (?, 'create', ?, datetime('now'))`
+        ).run(entryId, JSON.stringify(snapshotEntry(entryId)));
+
+        return entryId;
+      });
+
+      const entryId = insert();
       return {
-        content: [{ type: "text", text: `エラー: 借方合計(¥${totalDebit.toLocaleString()}) ≠ 貸方合計(¥${totalCredit.toLocaleString()})` }],
+        content: [{
+          type: "text",
+          text: `✅ 仕訳 #${entryId} を作成しました。\n\n日付: ${date}\n摘要: ${description}\n${formatLines(resolvedLines)}`,
+        }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `エラー: ${err instanceof Error ? err.message : String(err)}` }],
         isError: true,
       };
     }
+  }
+);
 
-    // 科目ID解決
-    type LineInput = { accountCode: string; debitAmount: number; creditAmount: number; allocationPercent?: number };
-    const resolvedLines = (lines as LineInput[]).map((l) => {
-      const account = getAccountByCode(l.accountCode);
-      if (!account) throw new Error(`科目コード "${l.accountCode}" が見つかりません。list_accounts で確認してください。`);
-      return { accountId: account.id, accountName: account.name, debitAmount: l.debitAmount, creditAmount: l.creditAmount, allocationPercent: l.allocationPercent ?? 100 };
-    });
-
-    // トランザクション挿入
-    const insert = db.transaction(() => {
-      const entryResult = db.prepare(
-        `INSERT INTO "JournalEntry" (date, description, isAdjusting, createdAt, updatedAt)
-         VALUES (?, ?, ?, datetime('now'), datetime('now'))`
-      ).run(new Date(date).toISOString(), description.trim(), isAdjusting ? 1 : 0);
-
-      const entryId = entryResult.lastInsertRowid as number;
-
-      for (const l of resolvedLines) {
-        db.prepare(
-          `INSERT INTO "JournalLine" (journalEntryId, accountId, debitAmount, creditAmount, allocationPercent)
-           VALUES (?, ?, ?, ?, ?)`
-        ).run(entryId, l.accountId, l.debitAmount, l.creditAmount, l.allocationPercent);
+// ─────────────────────────────────────────────────────────────────────────
+// TOOL: 仕訳の訂正
+// ─────────────────────────────────────────────────────────────────────────
+server.tool(
+  "update_journal_entry",
+  "既存の仕訳を訂正する。指定した項目だけ更新し、訂正前後の内容が監査ログに残る。lines を渡した場合は明細を全置換する。",
+  {
+    entryId:     z.number().describe("訂正する仕訳のID（search_entries の [#N] の N）"),
+    date:        z.string().optional().describe("仕訳日 YYYY-MM-DD（変更しないなら省略）"),
+    description: z.string().optional().describe("摘要（変更しないなら省略）"),
+    lines: z.array(z.object({
+      accountCode:       z.string().describe("勘定科目コード（例: '6005'）"),
+      subAccountName:    z.string().optional().describe("補助科目名（例: 'Stripe残高'）"),
+      debitAmount:       z.number().describe("借方金額（貸方のときは0）"),
+      creditAmount:      z.number().describe("貸方金額（借方のときは0）"),
+      description:       z.string().optional().describe("明細ごとの摘要（省略可）"),
+      allocationPercent: z.number().optional().describe("事業割合 0-100（省略時100）"),
+    })).optional().describe("明細。渡すと既存の明細を全部置き換える。按分率だけ変える場合も全行を渡すこと"),
+    isAdjusting: z.boolean().optional().describe("決算整理仕訳か（変更しないなら省略）"),
+  },
+  async ({ entryId, date, description, lines, isAdjusting }) => {
+    const existing = db.prepare('SELECT id FROM "JournalEntry" WHERE id = ?').get(entryId);
+    if (!existing) {
+      return { content: [{ type: "text", text: `エラー: 仕訳 #${entryId} が見つかりません。` }], isError: true };
+    }
+    if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return { content: [{ type: "text", text: "エラー: 日付は YYYY-MM-DD 形式で指定してください。" }], isError: true };
+    }
+    if (description !== undefined && !description.trim()) {
+      return { content: [{ type: "text", text: "エラー: 摘要を空にはできません。" }], isError: true };
+    }
+    if (lines !== undefined) {
+      if (lines.length < 2) {
+        return { content: [{ type: "text", text: "エラー: 最低2行の明細が必要です。" }], isError: true };
       }
-
-      // 監査ログ
-      db.prepare(
-        `INSERT INTO "JournalAuditLog" (journalEntryId, action, afterData, changedAt)
-         VALUES (?, 'create', ?, datetime('now'))`
-      ).run(entryId, JSON.stringify({ description, date, lines: resolvedLines }));
-
-      return entryId;
-    });
+      const imbalance = validateBalance(lines);
+      if (imbalance) {
+        return { content: [{ type: "text", text: `エラー: ${imbalance}` }], isError: true };
+      }
+    }
+    if (date === undefined && description === undefined && lines === undefined && isAdjusting === undefined) {
+      return { content: [{ type: "text", text: "エラー: 変更する項目がありません。" }], isError: true };
+    }
 
     try {
-      const entryId = insert();
-      const summary = resolvedLines
-        .map((l) => l.debitAmount > 0
-          ? `  借: ${l.accountName} ¥${l.debitAmount.toLocaleString()}`
-          : `  貸: ${l.accountName} ¥${l.creditAmount.toLocaleString()}`)
-        .join("\n");
+      // 解決はトランザクションの外でやる。科目名の誤りで途中まで書き換わるのを避けるため。
+      const resolvedLines = lines !== undefined ? resolveLines(lines as LineInput[]) : null;
+
+      const apply = db.transaction(() => {
+        const before = snapshotEntry(entryId);
+
+        if (date !== undefined) {
+          db.prepare('UPDATE "JournalEntry" SET date = ? WHERE id = ?')
+            .run(new Date(date).toISOString(), entryId);
+        }
+        if (description !== undefined) {
+          db.prepare('UPDATE "JournalEntry" SET description = ? WHERE id = ?')
+            .run(description.trim(), entryId);
+        }
+        if (isAdjusting !== undefined) {
+          db.prepare('UPDATE "JournalEntry" SET isAdjusting = ? WHERE id = ?')
+            .run(isAdjusting ? 1 : 0, entryId);
+        }
+        db.prepare(`UPDATE "JournalEntry" SET updatedAt = datetime('now') WHERE id = ?`).run(entryId);
+
+        if (resolvedLines) {
+          db.prepare('DELETE FROM "JournalLine" WHERE journalEntryId = ?').run(entryId);
+          for (const l of resolvedLines) {
+            db.prepare(
+              `INSERT INTO "JournalLine"
+                 (journalEntryId, accountId, subAccountId, debitAmount, creditAmount, description, allocationPercent)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`
+            ).run(entryId, l.accountId, l.subAccountId, l.debitAmount, l.creditAmount, l.description, l.allocationPercent);
+          }
+        }
+
+        const after = snapshotEntry(entryId);
+        db.prepare(
+          `INSERT INTO "JournalAuditLog" (journalEntryId, action, beforeData, afterData, changedAt)
+           VALUES (?, 'update', ?, ?, datetime('now'))`
+        ).run(entryId, JSON.stringify(before), JSON.stringify(after));
+
+        return after;
+      });
+
+      const after = apply();
+      const changed = [
+        date !== undefined        ? `日付 → ${date}` : null,
+        description !== undefined ? `摘要 → ${description}` : null,
+        isAdjusting !== undefined ? `決算整理 → ${isAdjusting}` : null,
+        resolvedLines             ? `明細を${resolvedLines.length}行に置換` : null,
+      ].filter(Boolean).join(" / ");
+
+      const body = resolvedLines
+        ? formatLines(resolvedLines)
+        : `摘要: ${after?.description ?? ""}`;
 
       return {
         content: [{
           type: "text",
-          text: `✅ 仕訳 #${entryId} を作成しました。\n\n日付: ${date}\n摘要: ${description}\n${summary}`,
+          text: `✅ 仕訳 #${entryId} を訂正しました。\n\n変更: ${changed}\n${body}\n\n訂正前の内容は監査ログに保存されています。`,
+        }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `エラー: ${err instanceof Error ? err.message : String(err)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// TOOL: 証憑の添付
+// ─────────────────────────────────────────────────────────────────────────
+server.tool(
+  "attach_receipt",
+  "領収書・請求書などの証憑ファイルを仕訳に添付する。ファイルは data/receipts にコピーされ、アプリからも参照できるようになる。",
+  {
+    entryId:      z.number().describe("添付先の仕訳ID"),
+    filePath:     z.string().describe("添付するファイルの絶対パス（PDF・画像）"),
+    originalName: z.string().optional().describe("保存名（省略時は元のファイル名）。後から探しやすい名前を付けると良い"),
+  },
+  async ({ entryId, filePath, originalName }) => {
+    const entry = db.prepare('SELECT id, description FROM "JournalEntry" WHERE id = ?')
+      .get(entryId) as { id: number; description: string } | undefined;
+    if (!entry) {
+      return { content: [{ type: "text", text: `エラー: 仕訳 #${entryId} が見つかりません。` }], isError: true };
+    }
+    if (!fs.existsSync(filePath)) {
+      return { content: [{ type: "text", text: `エラー: ファイルが見つかりません: ${filePath}` }], isError: true };
+    }
+    if (!fs.statSync(filePath).isFile()) {
+      return { content: [{ type: "text", text: `エラー: ディレクトリは添付できません: ${filePath}` }], isError: true };
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeType = MIME_BY_EXT[ext];
+    if (!mimeType) {
+      return {
+        content: [{ type: "text", text: `エラー: 対応していない形式です(${ext || "拡張子なし"})。対応: ${Object.keys(MIME_BY_EXT).join(", ")}` }],
+        isError: true,
+      };
+    }
+
+    try {
+      fs.mkdirSync(RECEIPT_DIR, { recursive: true });
+      // アプリ側と同じ命名規則: {epoch_ms}_{ランダム}.{拡張子}
+      const storedName = `${Date.now()}_${Math.random().toString(36).slice(2, 13)}${ext}`;
+      const dest = path.join(RECEIPT_DIR, storedName);
+      fs.copyFileSync(filePath, dest);
+      const size = fs.statSync(dest).size;
+
+      const result = db.prepare(
+        `INSERT INTO "Receipt" (journalEntryId, filePath, originalName, mimeType, fileSize, uploadedAt)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`
+      ).run(entryId, storedName, originalName ?? path.basename(filePath), mimeType, size);
+
+      const count = db.prepare('SELECT COUNT(*) as n FROM "Receipt" WHERE journalEntryId = ?')
+        .get(entryId) as { n: number };
+
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `✅ 証憑 #${result.lastInsertRowid} を仕訳 #${entryId} に添付しました。`,
+            ``,
+            `仕訳: ${entry.description}`,
+            `保存名: ${originalName ?? path.basename(filePath)}`,
+            `形式: ${mimeType} / ${(size / 1024).toFixed(1)} KB`,
+            `この仕訳の証憑: ${count.n}件`,
+          ].join("\n"),
         }],
       };
     } catch (err) {
