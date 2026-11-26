@@ -15,7 +15,7 @@
     "electron:build": "pnpm run build && node scripts/prepare-app-pack.js && electron-builder",
     "electron:pack": "pnpm run build && node scripts/prepare-app-pack.js && electron-builder --dir",
     "mcp": "tsx mcp/server.ts",
-    "test": "tsx --test src/lib/stripe-csv.test.ts src/lib/tax-return.test.ts"
+    "test": "tsx --test src/lib/stripe-csv.test.ts src/lib/tax-return.test.ts src/lib/depreciation.test.ts src/lib/balance-sheet.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

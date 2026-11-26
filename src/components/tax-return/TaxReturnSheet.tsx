@@ -249,6 +249,8 @@ function DepreciationTable({ rows, hideZero }: { rows: TaxReturnData["depreciati
       { label: "取得年月" },
       { label: "取得価額", align: "right" },
       { label: "耐用年数", align: "right" },
+      { label: "償却率", align: "right" },
+      { label: "本年中の償却期間", align: "right" },
       { label: "本年分の償却費", align: "right" },
       { label: "未償却残高", align: "right" },
       { label: "仕訳", align: "center" },
@@ -260,6 +262,8 @@ function DepreciationTable({ rows, hideZero }: { rows: TaxReturnData["depreciati
             <td className="whitespace-nowrap">{row.acquisitionYearMonth}</td>
             <AmountCell value={row.cost} />
             <td className="whitespace-nowrap text-right">{row.usefulLifeYears}年</td>
+            <td className="whitespace-nowrap text-right">{(row.rateMilli / 1000).toFixed(3)}</td>
+            <td className="whitespace-nowrap text-right">{row.months}/12</td>
             <AmountCell value={row.yearAmount} />
             <AmountCell value={row.endBookValue} />
             <td className="whitespace-nowrap text-center">
@@ -270,7 +274,7 @@ function DepreciationTable({ rows, hideZero }: { rows: TaxReturnData["depreciati
       </tbody>
       <tfoot className="print:table-row-group">
         <tr className={totalClass}>
-          <th colSpan={4} scope="row" className="text-left">合計</th>
+          <th colSpan={6} scope="row" className="text-left">合計</th>
           <AmountCell value={rows.reduce((sum, row) => sum + row.yearAmount, 0)} />
           <td colSpan={2} />
         </tr>

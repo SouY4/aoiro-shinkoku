@@ -108,6 +108,8 @@ export default async function FixedAssetsPage() {
                   <th className="px-3 py-3 text-right">償却基礎額</th>
                   <th className="px-3 py-3 text-center">償却方法</th>
                   <th className="px-3 py-3 text-center">耐用年数</th>
+                  <th className="px-3 py-3 text-center">償却率</th>
+                  <th className="px-3 py-3 text-center">償却期間</th>
                   <th className="px-3 py-3 text-right">本年償却費</th>
                   <th className="px-3 py-3 text-right">未償却残高</th>
                   <th className="px-3 py-3 text-center">仕訳</th>
@@ -128,6 +130,8 @@ export default async function FixedAssetsPage() {
                       <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(depreciationBase)}</td>
                       <td className="px-3 py-2 text-center">{methodLabel}</td>
                       <td className="px-3 py-2 text-center">{r.usefulLifeYears}年</td>
+                      <td className="px-3 py-2 text-center">{(r.rateMilli / 1000).toFixed(3)}</td>
+                      <td className="px-3 py-2 text-center">{r.months}/12</td>
                       <td className="px-3 py-2 text-right tabular-nums font-medium">
                         {r.yearAmount > 0 ? formatCurrency(r.yearAmount) : <span className="text-gray-400">—</span>}
                       </td>
@@ -147,7 +151,7 @@ export default async function FixedAssetsPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-300 font-medium">
-                  <td className="px-3 py-2" colSpan={6}>合計</td>
+                  <td className="px-3 py-2" colSpan={8}>合計</td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {formatCurrency(depreciationRows.reduce((s, r) => s + r.yearAmount, 0))}
                   </td>

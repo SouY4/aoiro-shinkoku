@@ -221,6 +221,8 @@ test("減価償却の未記帳と台帳との差、および当年の元入金�
     acquisitionYearMonth: "2026年1月",
     cost: 100,
     usefulLifeYears: 2,
+    rateMilli: 500,
+    months: 12,
     yearAmount: 50,
     endBookValue: 50,
   };

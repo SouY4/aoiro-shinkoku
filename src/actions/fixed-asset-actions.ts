@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { straightLineDepreciation } from "@/lib/depreciation";
+import { calcStraightLine } from "@/lib/depreciation";
 import { createJournalEntry } from "./journal-actions";
 
 export async function getFixedAssets() {
@@ -86,13 +86,14 @@ export async function getDepreciationForYear(fiscalYear: number) {
     },
   });
 
-  const yearStart = new Date(fiscalYear, 0, 1);
   const results: {
     assetId: number;
     name: string;
     acquisitionDate: Date;
     cost: number;
     usefulLifeYears: number;
+    rateMilli: number;
+    months: number;
     depreciationMethod: string;
     accumulatedAmount: number;
     bookValue: number;
@@ -112,21 +113,14 @@ export async function getDepreciationForYear(fiscalYear: number) {
     const accumulatedAmount = accumulated._sum.amount ?? 0;
     const bookValue = asset.cost - accumulatedAmount;
 
-    let yearAmount: number;
-    if (existing) {
-      yearAmount = existing.amount;
-    } else {
-      yearAmount =
-        asset.depreciationMethod === "straight_line"
-          ? straightLineDepreciation({
-              cost: asset.cost,
-              usefulLifeYears: asset.usefulLifeYears,
-              accumulatedAmount,
-              fiscalYearStart: yearStart,
-              acquisitionDate: asset.acquisitionDate,
-            })
-          : 0;
-    }
+    const { amount, rateMilli, months } = calcStraightLine({
+      cost: asset.cost,
+      usefulLifeYears: asset.usefulLifeYears,
+      accumulatedAmount,
+      fiscalYear,
+      acquisitionDate: asset.acquisitionDate,
+    });
+    const yearAmount = existing?.amount ?? (asset.depreciationMethod === "straight_line" ? amount : 0);
 
     results.push({
       assetId: asset.id,
@@ -134,11 +128,13 @@ export async function getDepreciationForYear(fiscalYear: number) {
       acquisitionDate: asset.acquisitionDate,
       cost: asset.cost,
       usefulLifeYears: asset.usefulLifeYears,
+      rateMilli,
+      months,
       depreciationMethod: asset.depreciationMethod,
       accumulatedAmount,
       bookValue,
       yearAmount,
-      endBookValue: Math.max(1, bookValue - yearAmount),
+      endBookValue: bookValue - yearAmount,
       alreadyRecorded: !!existing,
       assetAccountName: asset.assetAccount.name,
       expenseAccountName: asset.expenseAccount.name,

@@ -48,6 +48,8 @@ export async function getTaxReturnData(fiscalYear: number): Promise<TaxReturnDat
       acquisitionYearMonth: `${acquisitionDate.getFullYear()}年${acquisitionDate.getMonth() + 1}月`,
       cost: row.cost,
       usefulLifeYears: row.usefulLifeYears,
+      rateMilli: row.rateMilli,
+      months: row.months,
       yearAmount: row.yearAmount,
       endBookValue: row.endBookValue,
       alreadyRecorded: row.alreadyRecorded,

@@ -16,6 +16,8 @@ export interface DepreciationRow {
   acquisitionYearMonth: string;
   cost: number;
   usefulLifeYears: number;
+  rateMilli: number;
+  months: number;
   yearAmount: number;
   endBookValue: number;
   alreadyRecorded: boolean;
@@ -374,6 +376,8 @@ export function toCsv(data: TaxReturnData): string {
       [3, "減価償却", "", `${row.name}（取得年月 ${row.acquisitionYearMonth}・${status}）`, null, null],
       [3, "減価償却", "", `${row.name}（取得価額）`, null, row.cost],
       [3, "減価償却", "", `${row.name}（耐用年数）`, null, row.usefulLifeYears],
+      [3, "減価償却", "", `${row.name}（償却率）`, null, (row.rateMilli / 1000).toFixed(3)],
+      [3, "減価償却", "", `${row.name}（本年中の償却期間）`, null, `${row.months}/12`],
       [3, "減価償却", "", `${row.name}（本年分の償却費）`, null, row.yearAmount],
       [3, "減価償却", "", `${row.name}（未償却残高）`, null, row.endBookValue],
     );
